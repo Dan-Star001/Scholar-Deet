@@ -119,6 +119,20 @@ Data integrity and safe communication are prioritized through:
 
 ---
 
+---
+
+## Project Assets & Submission Links
+
+To fulfill the submission requirements, all project-related documentation and design assets are linked below:
+
+* **Presentation Slides (PDF):** [View the Project Presentation](https://github.com/Dan-Star001/Scholar-Deet/blob/main/docs/Scholar%20Deet.pdf)
+    * *Covers: Project details, core features, and technical stack.*
+* **Colour Palette:** [View the ScholarDeet Design Palette](https://coolors.co/3b82f6-29303d-ffffff-0a0a0a)
+    * *Our palette focuses on a professional "Tech-Blue" identity with clear semantic status indicators.*
+
+---
+
+
 ## License
 
 This project is licensed under the MIT License.
