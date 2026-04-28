@@ -18,7 +18,7 @@ function formatTime(seconds: number) {
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, isAuthenticated, login, signup, logout, updateSettings, loading, error, initializing } = useAuth();
+  const { user, isAuthenticated, login, signup, logout, updateSettings, updatePhotoUrl, loading, error, initializing, clearError } = useAuth();
 
   const [savedSession, setSavedSession] = useState(() => {
     try {
@@ -148,7 +148,7 @@ const Index = () => {
               <div className="text-center space-y-1">
                 {/* Auth form will render its own header with logo and Sign In/Up text */}
               </div>
-              <AuthForm onLogin={login} onSignup={signup} loading={loading} error={error} />
+              <AuthForm onLogin={login} onSignup={signup} loading={loading} error={error} onClearError={clearError} />
             </div>
           </div>
         </div>
@@ -164,6 +164,7 @@ const Index = () => {
       onStartClass={handleStartClass}
       onLogout={logout}
       onUpdateSettings={updateSettings}
+      onUpdatePhoto={updatePhotoUrl}
     />
   );
 };

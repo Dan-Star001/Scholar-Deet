@@ -1,6 +1,13 @@
-import { Button } from "@/components/ui/button";
+import { Button, Typography, Box } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Home, MessageSquare, Users, Clock, CheckCircle } from "lucide-react";
+import { 
+  Logout, 
+  Home as HomeIcon, 
+  Chat as ChatIcon, 
+  Groups as GroupsIcon, 
+  AccessTime as AccessTimeIcon, 
+  CheckCircle as CheckCircleIcon 
+} from "@mui/icons-material";
 import type { ChatMessage, Participant } from "@/hooks/useSession";
 import classEndedBg from "@/assets/class-ended-bg.jpg";
 
@@ -35,8 +42,6 @@ export function PostClassScreen({
     }
   };
 
-
-
   return (
     <div
       className="flex min-h-screen items-center justify-center p-6 relative"
@@ -47,38 +52,42 @@ export function PostClassScreen({
       }}
     >
       {/* Dark overlay */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-md" />
 
-      <div className="relative z-10 w-full max-w-md text-center space-y-8">
-        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-success/20 backdrop-blur-sm">
-          <CheckCircle className="h-10 w-10 text-success" />
+      <div className="relative z-10 w-full max-w-md text-center space-y-6">
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-success/20 backdrop-blur-md">
+          <CheckCircleIcon className="h-10 w-10 text-success" />
         </div>
 
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-white">
+          <Typography variant="h4" className="font-extrabold text-white tracking-tight">
             {type === "ended" 
-              ? (sessionName ? `${sessionName} has ended` : "Class has ended") 
-              : "You left the class"}
-          </h1>
+              ? (sessionName ? `${sessionName}` : "Class has ended") 
+              : "Session Left"}
+          </Typography>
+          <Typography variant="body1" className="text-white/80 font-medium">
+            {type === "ended" ? "The session has been concluded" : "You have left the session"}
+          </Typography>
         </div>
 
         <div className="flex justify-center py-2">
-          <div className="flex flex-col items-center gap-1">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 backdrop-blur-sm">
-              <Clock className="h-6 w-6 text-white/80" />
+          <div className="flex flex-col items-center gap-1 p-4 min-w-[140px]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 mb-1">
+              <AccessTimeIcon className="h-5 w-5 text-white" />
             </div>
-            <p className="text-lg font-semibold text-white">{duration}</p>
-            <p className="text-xs text-white/60">Duration</p>
+            <Typography variant="h5" className="font-black text-white">{duration}</Typography>
+            <Typography variant="caption" className="text-white/60 font-bold uppercase tracking-widest text-[10px]">Duration</Typography>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row justify-center gap-3">
+        <div className="flex flex-col justify-center gap-4">
           {(isInstructor || type === "left") && (
             <Button
+              variant="contained"
               onClick={handleBack}
-              className="h-11 px-6 rounded-xl bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm font-medium border border-white/10"
+              className="h-12 px-8 rounded-2xl bg-white text-black hover:bg-white/90 font-bold shadow-2xl normal-case transition-all hover:scale-105 active:scale-95"
+              startIcon={<HomeIcon className="h-5 w-5" />}
             >
-              <Home className="h-4 w-4 mr-2" />
               {isInstructor ? "Back to Dashboard" : "Back to Home"}
             </Button>
           )}

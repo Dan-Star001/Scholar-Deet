@@ -3,14 +3,21 @@ import type { Participant } from "@/hooks/useSession";
 import type { ICameraVideoTrack, IMicrophoneAudioTrack } from "agora-rtc-sdk-ng";
 import type { IAgoraRTCRemoteUser } from "agora-rtc-sdk-ng";
 import { 
+  IconButton, 
+  Typography, 
+  Box, 
+  Avatar, 
+  Tooltip 
+} from "@mui/material";
+import { 
   Mic, 
   MicOff, 
   Wifi, 
   WifiOff, 
   ChevronLeft, 
   ChevronRight,
-  Hand
-} from "lucide-react";
+  PanTool
+} from "@mui/icons-material";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface VideoGridProps {
@@ -41,7 +48,7 @@ function VideoTile({
     }
   }, [videoTrack]);
 
-  // Audio playback - crucial for remote users
+  // Audio playback
   useEffect(() => {
     if (audioTrack) {
       const playAudio = async () => {
@@ -73,11 +80,10 @@ function VideoTile({
       reactionRef.current = participant.lastReaction.timestamp;
       
       const newId = Date.now();
-      const xOffset = (Math.random() - 0.5) * 60; // Random jitter between -30 and 30
+      const xOffset = (Math.random() - 0.5) * 80;
       
       setActiveReactions(prev => [...prev, { id: newId, emoji: participant.lastReaction!.emoji, xOffset }]);
       
-      // Auto-cleanup after animation duration
       setTimeout(() => {
         setActiveReactions(prev => prev.filter(r => r.id !== newId));
       }, 3000);
@@ -86,43 +92,52 @@ function VideoTile({
 
   const renderNetworkIcon = () => {
     const q = participant.networkQuality ?? 0;
-    if (q === 0 || q === 7 || q === 8) return <WifiOff className="h-2.5 w-2.5 text-muted-foreground/50" />;
-    if (q <= 2) return <Wifi className="h-2.5 w-2.5 text-success" />;
-    if (q <= 4) return <Wifi className="h-3 w-3 text-warning" />;
-    return <WifiOff className="h-3 w-3 text-destructive" />;
+    if (q === 0 || q === 7 || q === 8) return <WifiOff sx={{ fontSize: 10 }} className="text-muted-foreground/50" />;
+    if (q <= 2) return <Wifi sx={{ fontSize: 10 }} className="text-success" />;
+    if (q <= 4) return <Wifi sx={{ fontSize: 10 }} className="text-warning" />;
+    return <WifiOff sx={{ fontSize: 10 }} className="text-destructive" />;
   };
 
   return (
     <div
-      className={`relative flex items-center justify-center rounded-xl bg-foreground/5 overflow-hidden transition-shadow ${
-        participant.handRaised ? "ring-2 ring-warning shadow-lg" : ""
+      className={`relative flex items-center justify-center rounded-2xl bg-muted/40 overflow-hidden transition-all border border-white/5 ${
+        participant.handRaised ? "ring-2 ring-secondary shadow-lg shadow-secondary/20" : ""
       }`}
     >
       {videoTrack ? (
         <div ref={containerRef} className="h-full w-full" />
       ) : (
-        <div className="flex h-full w-full items-center justify-center">
-          <div className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-full bg-primary/15">
-            <span className="text-xl sm:text-2xl font-semibold text-primary/70">{initials}</span>
-          </div>
+        <div className="flex h-full w-full items-center justify-center bg-muted/20">
+          <Avatar 
+            sx={{ 
+                width: { xs: 60, sm: 80, md: 100 }, 
+                height: { xs: 60, sm: 80, md: 100 }, 
+                fontSize: { xs: 24, sm: 32, md: 40 }, 
+                bgcolor: 'primary.main',
+                fontWeight: 'black',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+                color: 'primary.contrastText'
+            }}
+          >
+            {initials}
+          </Avatar>
         </div>
       )}
 
       {/* Name pill */}
-      <div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-lg bg-foreground/60 backdrop-blur-sm px-2.5 py-1">
+      <Box className="absolute bottom-3 left-3 flex items-center gap-2 rounded-xl bg-black/60 backdrop-blur-md px-3 py-1.5 border border-white/10">
         {participant.isMuted ? (
-          <MicOff className="h-2.5 w-2.5 text-destructive-foreground" />
+          <MicOff sx={{ fontSize: 12 }} className="text-destructive" />
         ) : (
-          <Mic className="h-2.5 w-2.5 text-background" />
+          <Mic sx={{ fontSize: 12 }} className="text-success" />
         )}
-        <span className="text-xs font-medium text-background truncate max-w-[124px]">
+        <Typography variant="caption" className="font-bold text-white truncate max-w-[100px] sm:max-w-[150px]">
           {participant.name}
-          {participant.isInstructor && " (Host)"}
-        </span>
-        <div className="ml-1 border-l border-background/20 pl-1.5">
-          {renderNetworkIcon()}
-        </div>
-      </div>
+          {participant.isInstructor && <Typography component="span" variant="caption" className="ml-1 text-primary-light font-black opacity-80">(Host)</Typography>}
+        </Typography>
+        <Divider orientation="vertical" flexItem sx={{ bgcolor: 'white', opacity: 0.1, mx: 0.5 }} />
+        {renderNetworkIcon()}
+      </Box>
 
       {/* Reactions Burst */}
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden">
@@ -132,21 +147,27 @@ function VideoTile({
               key={reaction.id}
               initial={{ scale: 0.5, y: 150, opacity: 0 }}
               animate={{ 
-                scale: [0.5, 1.2, 1], 
-                y: -150, 
+                scale: [0.5, 1.5, 1], 
+                y: -200, 
                 opacity: [0, 1, 1, 0],
                 x: reaction.xOffset,
                 rotate: reaction.xOffset * 0.5
               }}
               exit={{ opacity: 0, scale: 0 }}
               transition={{ duration: 2.5, ease: "easeOut" }}
-              className="absolute z-20 text-5xl drop-shadow-2xl"
+              className="absolute z-20 text-6xl drop-shadow-[0_10px_10px_rgba(0,0,0,0.3)]"
             >
               {reaction.emoji}
             </motion.div>
           ))}
         </AnimatePresence>
       </div>
+
+      {participant.handRaised && (
+          <Box className="absolute top-3 right-3 bg-secondary text-secondary-foreground p-1.5 rounded-xl shadow-lg border border-white/20 animate-bounce">
+              <PanTool fontSize="small" />
+          </Box>
+      )}
     </div>
   );
 }
@@ -192,9 +213,9 @@ export function VideoGrid({
   }, [totalPages, page]);
 
   return (
-    <div ref={containerRef} className="relative flex-1 p-2 sm:p-3 flex flex-col min-h-0 bg-muted/20">
+    <div ref={containerRef} className="relative flex-1 p-3 sm:p-5 flex flex-col min-h-0 bg-transparent">
       <div
-        className="flex-1 grid gap-2 auto-rows-fr"
+        className="flex-1 grid gap-4 auto-rows-fr"
         style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
       >
         {visibleParticipants.map((p) => {
@@ -204,8 +225,6 @@ export function VideoGrid({
           if (p.id === localParticipantId) {
             videoTrack = localVideoTrack;
           } else {
-            // Priority 1: Match by the agoraUid synced to Firebase
-            // Priority 2: Match by participant ID if it happens to be numeric (fallback)
             const remote = remoteUsers.find((u) => 
                u.uid === p.agoraUid || String(u.uid) === p.id
             );
@@ -225,34 +244,38 @@ export function VideoGrid({
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 pt-2 h-10">
-          <button
+        <Box className="flex items-center justify-center gap-4 pt-4 h-14">
+          <IconButton
             onClick={() => setPage(Math.max(0, page - 1))}
             disabled={page === 0}
-            className="h-8 w-8 rounded-full flex items-center justify-center bg-muted hover:bg-muted-foreground/10 disabled:opacity-30 transition-colors"
+            className="h-10 w-10 rounded-xl bg-background/50 hover:bg-background border border-white/5 shadow-md disabled:opacity-30 transition-all"
           >
-            <ChevronLeft className="h-4 w-4 text-foreground" />
-          </button>
-          <div className="flex gap-1">
+            <ChevronLeft fontSize="small" className="text-foreground" />
+          </IconButton>
+          
+          <div className="flex gap-2">
             {Array.from({ length: totalPages }).map((_, i) => (
-              <button
+              <Box
                 key={i}
                 onClick={() => setPage(i)}
-                className={`h-2 w-2 rounded-full transition-colors ${
-                  i === page ? "bg-primary" : "bg-muted-foreground/30"
+                className={`h-2.5 w-2.5 rounded-full cursor-pointer transition-all ${
+                  i === page ? "bg-primary scale-125 shadow-[0_0_10px_rgba(43,45,66,0.5)]" : "bg-muted-foreground/30 hover:bg-muted-foreground/50"
                 }`}
               />
             ))}
           </div>
-          <button
+
+          <IconButton
             onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
             disabled={page === totalPages - 1}
-            className="h-8 w-8 rounded-full flex items-center justify-center bg-muted hover:bg-muted-foreground/10 disabled:opacity-30 transition-colors"
+            className="h-10 w-10 rounded-xl bg-background/50 hover:bg-background border border-white/5 shadow-md disabled:opacity-30 transition-all"
           >
-            <ChevronRight className="h-4 w-4 text-foreground" />
-          </button>
-        </div>
+            <ChevronRight fontSize="small" className="text-foreground" />
+          </IconButton>
+        </Box>
       )}
     </div>
   );
 }
+
+const Divider = ({ orientation, flexItem, sx }: any) => <Box sx={{ width: orientation === 'vertical' ? '1px' : '100%', height: orientation === 'vertical' ? 'auto' : '1px', alignSelf: flexItem ? 'stretch' : 'auto', ...sx }} />;

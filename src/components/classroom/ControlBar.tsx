@@ -1,20 +1,21 @@
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useState } from "react";
+import {  IconButton,  Button,  Typography,  Tooltip,  Popover, Box, Badge } from "@mui/material";
 import { 
   Mic, 
   MicOff, 
-  Video, 
-  VideoOff, 
-  Hand, 
-  VolumeX, 
-  Smile, 
-  Users, 
-  MessageSquare,
-  PhoneOff, 
-  LogOut,
-  Volume2,
+  Videocam, 
+  VideocamOff, 
+  PanTool, 
+  VolumeOff, 
+  EmojiEmotions, 
+  Groups, 
+  Chat,
+  CallEnd, 
+  Logout,
+  VolumeUp,
   Lock,
-  Unlock
-} from "lucide-react";
+  LockOpen
+} from "@mui/icons-material";
 
 interface ControlBarProps {
   isMuted: boolean;
@@ -62,162 +63,206 @@ export function ControlBar({
   onReleaseMutes,
 }: ControlBarProps) {
   const emojis = ["👋", "👏", "👍", "❤️", "😂", "😮", "🎉", "🔥"];
+  const [reactionAnchor, setReactionAnchor] = useState<HTMLElement | null>(null);
+
+  const handleOpenReactions = (event: React.MouseEvent<HTMLElement>) => {
+    setReactionAnchor(event.currentTarget);
+  };
+
+  const handleCloseReactions = () => {
+    setReactionAnchor(null);
+  };
+
+  const reactionOpen = Boolean(reactionAnchor);
 
   return (
-    <div className="flex items-center justify-center px-4 sm:px-8 py-4 glass-premium shadow-2xl z-20 mx-4 mb-4 rounded-2xl">
-      <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-center">
-        <button
-          onClick={onToggleMute}
-          disabled={!isInstructor && mutesLocked}
-          title={!isInstructor && mutesLocked ? "Mic locked by host" : isMuted ? "Unmute" : "Mute"}
-          className={`h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center transition-all ${
-            isMuted
-              ? "bg-destructive text-destructive-foreground"
-              : "bg-muted text-foreground hover:bg-muted-foreground/15"
-          } ${!isInstructor && mutesLocked ? "opacity-50 cursor-not-allowed" : ""}`}
-        >
-          {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-        </button>
+    <div className="flex items-center justify-center px-4 sm:px-8 py-3 glass-premium !bg-background/80 backdrop-blur-2xl shadow-2xl z-20 mx-4 mb-4 rounded-3xl border border-white/5">
+      <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-center">
+        {/* Mute */}
+        <Tooltip title={!isInstructor && mutesLocked ? "Mic locked by host" : isMuted ? "Unmute" : "Mute"}>
+          <IconButton
+            onClick={onToggleMute}
+            disabled={!isInstructor && mutesLocked}
+            className={`h-11 w-11 rounded-2xl transition-all ${
+              isMuted
+                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                : "bg-muted text-foreground hover:bg-muted-foreground/15"
+            } ${!isInstructor && mutesLocked ? "opacity-50 cursor-not-allowed" : ""}`}
+            size="small"
+          >
+            {isMuted ? <MicOff /> : <Mic />}
+          </IconButton>
+        </Tooltip>
 
         {/* Video */}
-        <button
-          onClick={onToggleVideo}
-          className={`h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center transition-all ${
-            !isVideoOn
-              ? "bg-destructive text-destructive-foreground"
-              : "bg-muted text-foreground hover:bg-muted-foreground/15"
-          }`}
-        >
-          {isVideoOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
-        </button>
-
-
+        <Tooltip title={isVideoOn ? "Turn off camera" : "Turn on camera"}>
+          <IconButton
+            onClick={onToggleVideo}
+            className={`h-11 w-11 rounded-2xl transition-all ${
+              !isVideoOn
+                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                : "bg-muted text-foreground hover:bg-muted-foreground/15"
+            }`}
+            size="small"
+          >
+            {isVideoOn ? <Videocam /> : <VideocamOff />}
+          </IconButton>
+        </Tooltip>
 
         {/* Hand Raise */}
-        <button
-          onClick={onToggleHand}
-          className={`h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center transition-all ${
-            handRaised
-              ? "bg-warning text-warning-foreground animate-pulse-glow"
-              : "bg-muted text-foreground hover:bg-muted-foreground/15"
-          }`}
-        >
-          <Hand className="h-5 w-5" />
-        </button>
+        <Tooltip title={handRaised ? "Lower Hand" : "Raise Hand"}>
+          <IconButton
+            onClick={onToggleHand}
+            className={`h-11 w-11 rounded-2xl transition-all ${
+              handRaised
+                ? "bg-secondary text-secondary-foreground shadow-[0_0_15px_rgba(146,220,229,0.5)] animate-pulse"
+                : "bg-muted text-foreground hover:bg-muted-foreground/15"
+            }`}
+            size="small"
+          >
+            <PanTool />
+          </IconButton>
+        </Tooltip>
 
         {/* Mute All - Instructor only */}
         {onMuteAll && (
-          <button
-            onClick={onMuteAll}
-            className={`h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center transition-all ${
-              mutesLocked ? "bg-warning text-warning-foreground" : "bg-muted text-foreground hover:bg-warning/20 hover:text-warning"
-            }`}
-            title="Mute all students"
-          >
-            <VolumeX className="h-5 w-5" />
-          </button>
+          <Tooltip title="Mute Students">
+            <IconButton
+              onClick={onMuteAll}
+              className={`h-11 w-11 rounded-2xl transition-all ${
+                mutesLocked ? "bg-secondary text-secondary-foreground" : "bg-muted text-foreground hover:bg-secondary/20 hover:text-secondary"
+              }`}
+              size="small"
+            >
+              <VolumeOff />
+            </IconButton>
+          </Tooltip>
         )}
 
         {/* Release Mics - Instructor only */}
         {isInstructor && mutesLocked && onReleaseMutes && (
-          <button
-            onClick={onReleaseMutes}
-            className="h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center transition-all bg-success/20 text-success hover:bg-success/30"
-            title="Release mics"
-          >
-            <Volume2 className="h-5 w-5" />
-          </button>
+          <Tooltip title="Release mics">
+            <IconButton
+              onClick={onReleaseMutes}
+              className="h-11 w-11 rounded-2xl transition-all bg-success/20 text-success hover:bg-success/30 shadow-sm"
+              size="small"
+            >
+              <VolumeUp />
+            </IconButton>
+          </Tooltip>
         )}
 
         {/* Reactions */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <button className="h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center transition-all bg-muted text-foreground hover:bg-muted-foreground/15">
-              <Smile className="h-5 w-5" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-2" side="top" align="center">
-            <div className="flex gap-1.5">
+        <div>
+          <Tooltip title="Reactions">
+            <IconButton 
+              onClick={handleOpenReactions}
+              className="h-11 w-11 rounded-2xl transition-all bg-muted text-foreground hover:bg-muted-foreground/15"
+              size="small"
+            >
+              <EmojiEmotions />
+            </IconButton>
+          </Tooltip>
+          <Popover
+            open={reactionOpen}
+            anchorEl={reactionAnchor}
+            onClose={handleCloseReactions}
+            anchorOrigin={{
+              vertical: 'top',
+              horizontal: 'center',
+            }}
+            transformOrigin={{
+              vertical: 'bottom',
+              horizontal: 'center',
+            }}
+            slotProps={{
+              paper: {
+                className: "rounded-2xl p-2 mb-2 bg-background/90 backdrop-blur-xl border border-white/10 shadow-2xl",
+              }
+            }}
+          >
+            <div className="flex gap-1">
               {emojis.map((emoji) => (
-                <button
+                <IconButton
                   key={emoji}
-                  onClick={() => onSendReaction(emoji)}
-                  className="h-9 w-9 flex items-center justify-center text-xl hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => {
+                    onSendReaction(emoji);
+                    handleCloseReactions();
+                  }}
+                  className="h-10 w-10 text-xl hover:bg-muted/50 rounded-xl transition-all hover:scale-110"
                 >
                   {emoji}
-                </button>
+                </IconButton>
               ))}
             </div>
-          </PopoverContent>
-        </Popover>
+          </Popover>
+        </div>
 
-        <div className="h-6 w-px bg-border mx-1" />
+        <div className="h-8 w-px bg-border/20 mx-1 hidden sm:block" />
 
         {/* Roster */}
-        <button
-          onClick={() => onTogglePanel("roster")}
-          className={`relative h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center transition-all ${
-            activeSidePanel === "roster"
-              ? "bg-primary/10 text-primary"
-              : "bg-muted text-foreground hover:bg-muted-foreground/15"
-          }`}
-        >
-          <Users className="h-5 w-5" />
-          <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 flex items-center justify-center text-[10px] font-bold bg-primary text-primary-foreground rounded-full px-1">
-            {participantCount}
-          </span>
-        </button>
+        <Tooltip title="Participants">
+          <IconButton
+            onClick={() => onTogglePanel("roster")}
+            className={`h-11 w-11 rounded-2xl transition-all ${
+              activeSidePanel === "roster"
+                ? "bg-primary/10 text-primary shadow-inner"
+                : "bg-muted text-foreground hover:bg-muted-foreground/15"
+            }`}
+            size="small"
+          >
+            <Badge badgeContent={participantCount} color="primary" sx={{ '& .MuiBadge-badge': { fontSize: 10, fontWeight: 'bold' } }}>
+              <Groups />
+            </Badge>
+          </IconButton>
+        </Tooltip>
 
         {/* Chat Toggle (Instructor only) */}
         {isInstructor && onToggleChatMute && (
-          <button
-            onClick={onToggleChatMute}
-            className={`relative h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center transition-all mx-1.5 z-20 ${
-              chatMuted
-                ? "bg-[#f59e0b] text-white shadow-[0_0_15px_rgba(245,158,11,0.4)] ring-2 ring-[#f59e0b]/50"
-                : "bg-muted text-foreground hover:bg-muted-foreground/15"
-            }`}
-            title={chatMuted ? "Unlock Chat" : "Lock Chat"}
-          >
-            {chatMuted ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
-          </button>
+          <Tooltip title={chatMuted ? "Unlock Chat" : "Lock Chat"}>
+            <IconButton
+              onClick={onToggleChatMute}
+              className={`h-11 w-11 rounded-2xl transition-all z-20 ${
+                chatMuted
+                  ? "bg-secondary text-secondary-foreground shadow-[0_0_20px_rgba(146,220,229,0.4)] ring-2 ring-secondary/50"
+                  : "bg-muted text-foreground hover:bg-muted-foreground/15"
+              }`}
+              size="small"
+            >
+              {chatMuted ? <Lock /> : <LockOpen />}
+            </IconButton>
+          </Tooltip>
         )}
 
         {/* Chat */}
-        <button
-          onClick={() => onTogglePanel("chat")}
-          className={`relative h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center transition-all ${
-            activeSidePanel === "chat"
-              ? "bg-primary/10 text-primary"
-              : "bg-muted text-foreground hover:bg-muted-foreground/15"
-          }`}
-        >
-          <MessageSquare className="h-5 w-5" />
-          {unreadMessages > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 flex items-center justify-center text-[10px] font-bold bg-destructive text-destructive-foreground rounded-full px-1">
-              {unreadMessages}
-            </span>
-          )}
-        </button>
+        <Tooltip title="Chat">
+          <IconButton
+            onClick={() => onTogglePanel("chat")}
+            className={`h-11 w-11 rounded-2xl transition-all ${
+              activeSidePanel === "chat"
+                ? "bg-primary/10 text-primary shadow-inner"
+                : "bg-muted text-foreground hover:bg-muted-foreground/15"
+            }`}
+            size="small"
+          >
+            <Badge badgeContent={unreadMessages} color="error" sx={{ '& .MuiBadge-badge': { fontSize: 10, fontWeight: 'bold' } }}>
+              <Chat />
+            </Badge>
+          </IconButton>
+        </Tooltip>
 
-        <div className="h-6 w-px bg-border mx-1" />
+        <div className="h-8 w-px bg-border/20 mx-1 hidden sm:block" />
 
-        <button
+        <Button
+          variant="contained"
           onClick={onLeave}
-          className="h-10 sm:h-11 rounded-full px-4 sm:px-5 flex items-center gap-1.5 font-medium text-sm transition-all bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          className={`h-11 rounded-2xl px-5 font-bold shadow-lg transition-all active:scale-95 normal-case ${
+            isInstructor ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          }`}
+          startIcon={isInstructor ? <CallEnd /> : <Logout />}
         >
-          {isInstructor ? (
-            <>
-              <PhoneOff className="h-4 w-4 mr-1.5" />
-              <span className="hidden sm:inline">End</span>
-            </>
-          ) : (
-            <>
-              <LogOut className="h-4 w-4 mr-1.5" />
-              <span className="hidden sm:inline">Leave</span>
-            </>
-          )}
-        </button>
+          {isInstructor ? "End" : "Leave"}
+        </Button>
       </div>
     </div>
   );

@@ -47,26 +47,35 @@ const ClassRoom = () => {
   const [initialVideoOn, setInitialVideoOn] = useState(savedStudent?.isVideoOn ?? false);
   const [hasJoined, setHasJoined] = useState(!!savedStudent);
   const [leftInfo, setLeftInfo] = useState<{ duration: string; name: string } | null>(null);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   // On reload with saved session, re-register presence in Firebase
   useEffect(() => {
     if (savedStudent && sessionId && !currentUserId) {
-      const id = joinSession(savedStudent.name, savedStudent.isMuted, savedStudent.isVideoOn);
-      if (id) setCurrentUserId(id);
+      joinSession(savedStudent.name, savedStudent.isMuted, savedStudent.isVideoOn).then((result) => {
+        if (result && result !== "capacity_exceeded") {
+          setCurrentUserId(result);
+        }
+      });
     }
   }, []);
 
-  const handleJoin = (name: string, isMuted: boolean, isVideoOn: boolean) => {
+  const handleJoin = async (name: string, isMuted: boolean, isVideoOn: boolean) => {
+    setJoinError(null);
     setDisplayName(name);
     setInitialMuted(isMuted);
     setInitialVideoOn(isVideoOn);
-    const id = joinSession(name, isMuted, isVideoOn);
-    if (id) {
-      setCurrentUserId(id);
+    const result = await joinSession(name, isMuted, isVideoOn);
+    if (result === "capacity_exceeded") {
+      setJoinError("This session is full. The maximum number of students has been reached.");
+      return;
+    }
+    if (result) {
+      setCurrentUserId(result);
       // Persist to sessionStorage so the student survives a reload
       sessionStorage.setItem(
         `${STUDENT_SESSION_KEY}_${sessionId}`,
-        JSON.stringify({ participantId: id, name, isMuted, isVideoOn })
+        JSON.stringify({ participantId: result, name, isMuted, isVideoOn })
       );
       setHasJoined(true);
     }
@@ -132,7 +141,7 @@ const ClassRoom = () => {
     );
   }
 
-  return <PreJoinScreen sessionId={sessionId ?? ""} onJoin={handleJoin} />;
+  return <PreJoinScreen sessionId={sessionId ?? ""} onJoin={handleJoin} error={joinError} />;
 };
 
 export default ClassRoom;

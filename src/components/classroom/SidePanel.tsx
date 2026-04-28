@@ -1,8 +1,17 @@
 import { useState, useRef, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { 
+  Button, 
+  TextField, 
+  Typography, 
+  IconButton, 
+  Tabs, 
+  Tab, 
+  Box,
+  Tooltip,
+  Paper
+} from "@mui/material";
 import type { Participant, ChatMessage } from "@/hooks/useSession";
-import { X, Send, Hand, Pin, PinOff, UserX } from "lucide-react";
+import { Close, Send, PanTool, PushPin, PushPinOutlined } from "@mui/icons-material";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { getProfanity } from "@/utils/profanityFilter";
@@ -121,7 +130,7 @@ export function SidePanel({
           splitParts.forEach((splitPart, index) => {
             newParts.push(splitPart);
             if (index < splitParts.length - 1) {
-              newParts.push(<span key={p.id + index} className="text-primary font-bold">{mention}</span>);
+              newParts.push(<span key={p.id + index} className="text-secondary font-bold">{mention}</span>);
             }
           });
         } else {
@@ -133,6 +142,7 @@ export function SidePanel({
 
     return <>{parts}</>;
   };
+
   return (
     <motion.div
       initial={{ x: "100%" }}
@@ -142,122 +152,126 @@ export function SidePanel({
       className="flex h-full w-72 sm:w-80 flex-col glass-premium !bg-background/80 backdrop-blur-2xl shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.1)] z-30 border-l border-white/5"
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-white/5 z-10 px-4 py-3">
-        <div className="flex bg-muted/40 backdrop-blur-sm rounded-lg p-0.5">
-          <button
-            onClick={() => onTabChange("chat")}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
-              activeTab === "chat"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+      <div className="flex items-center justify-between border-b border-white/5 z-10 px-4 py-1.5">
+        <Tabs 
+          value={activeTab} 
+          onChange={(_, val) => onTabChange(val)}
+          sx={{ minHeight: 40 }}
+          slotProps={{
+            indicator: { style: { display: 'none' } }
+          }}
+        >
+          <Tab 
+            value="chat" 
+            label="Chat" 
+            className={`min-w-0 px-4 text-[11px] font-bold uppercase tracking-wider h-8 rounded-lg transition-all ${
+              activeTab === "chat" ? "bg-muted text-primary" : "text-muted-foreground"
             }`}
-          >
-            Chat
-          </button>
-          <button
-            onClick={() => onTabChange("roster")}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
-              activeTab === "roster"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+          />
+          <Tab 
+            value="roster" 
+            label={`People (${participants.length})`} 
+            className={`min-w-0 px-4 text-[11px] font-bold uppercase tracking-wider h-8 rounded-lg transition-all ${
+              activeTab === "roster" ? "bg-muted text-primary" : "text-muted-foreground"
             }`}
-          >
-            People ({participants.length})
-          </button>
-        </div>
-        <button onClick={onClose} className="h-7 w-7 rounded-full flex items-center justify-center hover:bg-muted text-muted-foreground">
-          <X className="h-4 w-4" />
-        </button>
+          />
+        </Tabs>
+        <IconButton onClick={onClose} size="small" className="text-muted-foreground hover:bg-muted">
+          <Close fontSize="small" />
+        </IconButton>
       </div>
 
       {/* Content */}
       {activeTab === "chat" ? (
         <>
           {chatMuted && !isInstructor && (
-            <div className="bg-destructive/10 px-4 py-2 text-[10px] font-medium text-destructive text-center uppercase tracking-wider">
+            <div className="bg-destructive/10 px-4 py-2 text-[10px] font-bold text-destructive text-center uppercase tracking-wider">
               Chat is muted by admin
             </div>
           )}
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4 relative">
             {pinnedMessageId && messages.find(m => m.id === pinnedMessageId) && (
-              <div 
-                className="sticky -top-4 z-10 bg-background border-b border-primary/20 p-3 -mx-4 -mt-4 mb-4 cursor-pointer shadow-sm group"
+              <Paper 
+                elevation={0}
+                className="sticky -top-4 z-10 bg-background/95 backdrop-blur-sm border-b border-secondary/20 p-3 -mx-4 -mt-4 mb-4 cursor-pointer shadow-sm group"
                 onClick={() => {
                   document.getElementById(`message-${pinnedMessageId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }}
               >
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="bg-primary/10 text-primary text-[9px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
-                    <Pin className="h-2.5 w-2.5" /> Pinned
+                  <span className="bg-secondary/20 text-secondary text-[9px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
+                    <PushPin fontSize="inherit" /> Pinned
                   </span>
-                  <span className="text-[10px] font-semibold text-foreground/70">
+                  <Typography variant="caption" className="font-bold text-foreground/70">
                     {messages.find(m => m.id === pinnedMessageId)?.senderName}
-                  </span>
+                  </Typography>
                 </div>
-                <p className="text-xs text-foreground/80 line-clamp-2 pr-6">
+                <Typography variant="body2" className="text-xs text-foreground/80 line-clamp-2 pr-6 font-medium">
                   {messages.find(m => m.id === pinnedMessageId)?.text}
-                </p>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPinMessage?.(null);
-                      }}
-                      className="absolute right-2 top-3 h-6 w-6 rounded-full flex items-center justify-center bg-background border shadow-sm transition-colors hover:bg-destructive hover:text-destructive-foreground hover:border-destructive opacity-0 group-hover:opacity-100"
-                      title="Unpin message"
-                    >
-                      <PinOff className="h-3 w-3" />
-                    </button>
-              </div>
+                </Typography>
+                <IconButton 
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPinMessage?.(null);
+                  }}
+                  className="absolute right-2 top-3 bg-background border shadow-sm transition-colors hover:bg-destructive hover:text-white opacity-0 group-hover:opacity-100"
+                  title="Unpin message"
+                >
+                  <PushPinOutlined fontSize="small" />
+                </IconButton>
+              </Paper>
             )}
             {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center pt-12 text-center">
-                <p className="text-sm text-muted-foreground">No messages yet</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">Start the conversation!</p>
+              <div className="flex flex-col items-center justify-center pt-12 text-center opacity-40">
+                <Typography variant="body2" className="text-muted-foreground">No messages yet</Typography>
+                <Typography variant="caption" className="mt-1">Start the conversation!</Typography>
               </div>
             )}
             {messages.map((msg) => (
               <div key={msg.id} id={`message-${msg.id}`} className="space-y-0.5 group/msg">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-xs font-semibold text-foreground">{msg.senderName}</span>
-                  <span className="text-[10px] text-muted-foreground">
+                  <Typography variant="caption" className="font-bold text-foreground">{msg.senderName}</Typography>
+                  <Typography variant="caption" className="text-[10px] text-muted-foreground">
                     {new Date(msg.timestamp).toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
-                  </span>
+                  </Typography>
                   {isInstructor && (
-                    <button 
+                    <IconButton 
+                      size="small"
                       onClick={() => onPinMessage?.(msg.id === pinnedMessageId ? null : msg.id)}
-                      className={`text-[10px] p-1 rounded-full transition-opacity opacity-0 group-hover/msg:opacity-100 ${
-                        msg.id === pinnedMessageId ? "text-primary hover:bg-primary/10" : "text-muted-foreground hover:bg-muted"
+                      className={`p-1 transition-opacity opacity-0 group-hover/msg:opacity-100 ${
+                        msg.id === pinnedMessageId ? "text-secondary hover:bg-secondary/10" : "text-muted-foreground hover:bg-muted"
                       }`}
                       title={msg.id === pinnedMessageId ? "Unpin message" : "Pin message"}
                     >
-                      {msg.id === pinnedMessageId ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
-                    </button>
+                      {msg.id === pinnedMessageId ? <PushPinOutlined fontSize="small" /> : <PushPin fontSize="small" />}
+                    </IconButton>
                   )}
                 </div>
-                <p className="text-sm leading-relaxed text-foreground/80">
+                <Typography variant="body2" className="text-sm leading-relaxed text-foreground/80">
                   {renderMessageText(msg.text)}
-                </p>
+                </Typography>
               </div>
             ))}
             <div ref={bottomRef} />
           </div>
-          <div className="shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-3 z-10 relative">
+          <div className="shadow-[0_-4px_15px_-3px_rgba(0,0,0,0.05)] p-4 z-10 relative bg-background/50">
             {showSuggestions && filteredParticipants.length > 0 && (
-              <div className="absolute bottom-full left-3 right-3 bg-background border rounded-lg shadow-lg mb-2 overflow-hidden z-20">
-                <div className="p-2 border-b bg-muted/30 text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+              <div className="absolute bottom-full left-3 right-3 bg-background border border-border/50 rounded-xl shadow-xl mb-2 overflow-hidden z-20 backdrop-blur-xl">
+                <div className="p-2 border-b border-border/30 bg-muted/30 text-[9px] uppercase font-bold text-muted-foreground tracking-wider">
                   Mention someone
                 </div>
                 {filteredParticipants.map((p) => (
                   <button
                     key={p.id}
                     onClick={() => insertMention(p.name)}
-                    className="w-full text-left px-3 py-2 text-xs hover:bg-primary/5 hover:text-primary transition-colors flex items-center gap-2"
+                    className="w-full text-left px-3 py-2.5 text-xs hover:bg-secondary/10 hover:text-secondary transition-colors flex items-center gap-2"
                   >
-                    <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold">
+                    <div className="h-6 w-6 rounded-full bg-secondary/10 flex items-center justify-center text-[10px] font-bold text-secondary">
                       {p.name.charAt(0)}
                     </div>
                     {p.name}
@@ -265,37 +279,49 @@ export function SidePanel({
                 ))}
               </div>
             )}
-            <div className="flex gap-2">
-              <textarea
-                ref={textareaRef}
+            <div className="flex items-end gap-2">
+              <TextField
+                fullWidth
+                multiline
+                maxRows={4}
                 placeholder={chatMuted && !isInstructor ? "Chat is locked by host..." : "Send a message..."}
                 value={draft}
-                onChange={handleTextChange}
+                onChange={(e) => handleTextChange(e as any)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     if (!chatMuted || isInstructor) handleSend();
                   }
                 }}
-                rows={1}
                 disabled={chatMuted && !isInstructor}
-                className={`w-full min-h-[36px] max-h-32 py-2 px-3 resize-none overflow-y-auto rounded-lg border-0 text-sm placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors ${
-                  chatMuted && !isInstructor ? "bg-muted/50 cursor-not-allowed italic" : "bg-muted"
-                }`}
-                style={{ fieldSizing: "content" } as any}
+                variant="outlined"
+                slotProps={{
+                  input: {
+                    className: `rounded-xl text-sm border-0 ${
+                      chatMuted && !isInstructor ? "bg-muted/50 cursor-not-allowed italic" : "bg-muted/40"
+                    }`,
+                  }
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    padding: '8px 12px',
+                    '& fieldset': { border: 'none' },
+                    '&:hover fieldset': { border: 'none' },
+                    '&.Mui-focused fieldset': { border: 'none' },
+                  }
+                }}
               />
-              <Button
-                size="icon"
+              <IconButton
                 onClick={handleSend}
                 disabled={!draft.trim() || (chatMuted && !isInstructor)}
-                className={`h-9 w-9 rounded-lg shrink-0 transition-all ${
+                className={`h-10 w-10 rounded-xl shrink-0 transition-all ${
                   chatMuted && !isInstructor 
-                    ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50" 
-                    : "bg-primary text-primary-foreground hover:bg-primary/90"
+                    ? "bg-muted text-muted-foreground opacity-50" 
+                    : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
                 }`}
               >
-                <Send className="h-4 w-4" />
-              </Button>
+                <Send fontSize="small" />
+              </IconButton>
             </div>
           </div>
         </>
@@ -304,30 +330,30 @@ export function SidePanel({
           {sorted.map((p) => (
             <div
               key={p.id}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${
-                p.handRaised ? "bg-warning/10" : "hover:bg-muted"
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors border border-transparent ${
+                p.handRaised ? "bg-secondary/10 border-secondary/20" : "hover:bg-muted/40"
               }`}
             >
               <div
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold shrink-0 ${
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold shrink-0 transition-all shadow-sm ${
                   p.isInstructor
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground"
-                } ${p.handRaised ? "ring-2 ring-warning animate-pulse-glow" : ""}`}
+                } ${p.handRaised ? "ring-2 ring-secondary animate-pulse" : ""}`}
               >
                 {p.name.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">
+                <Typography variant="body2" className="font-bold text-foreground truncate">
                   {p.name}
                   {p.isInstructor && (
-                    <span className="ml-1.5 text-[10px] text-primary font-medium">(Host)</span>
+                    <span className="ml-1.5 text-[9px] text-primary font-bold uppercase tracking-wider bg-primary/10 px-1.5 py-0.5 rounded">(Host)</span>
                   )}
-                </p>
+                </Typography>
               </div>
-              {p.handRaised && <Hand className="h-4 w-4 text-warning shrink-0" />}
+              {p.handRaised && <PanTool fontSize="small" className="text-secondary shrink-0" />}
               <div
-                className={`h-2 w-2 rounded-full shrink-0 ${
+                className={`h-2 w-2 rounded-full shrink-0 shadow-sm ${
                   p.isMuted ? "bg-muted-foreground/30" : "bg-success"
                 }`}
               />

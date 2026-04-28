@@ -1,55 +1,52 @@
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { Button, TextField, Typography, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Avatar, Chip, LinearProgress, InputAdornment, Alert, Tooltip as MuiTooltip } from "@mui/material";
+import { Add as PlusIcon, Groups, MenuBook, CheckCircle, PersonOff, Cancel as XCircle, PersonRemove, Delete as Trash2Icon, Download, Visibility, Assignment, Chat, PlayArrow as PlayIcon, OpenInFull as Maximize2Icon, ContentCopy as CopyIcon, Check, ChevronLeft, ChevronRight, Edit, School, Email, Business, People, PersonAdd, UploadFile, Search, Close, Save, Badge, CameraAlt,
+  AccountCircle,
+} from "@mui/icons-material";
 import { 
-  Plus, 
-  Users, 
-  BookOpen, 
-  CheckCircle, 
-  UserX, 
-  XCircle, 
-  UserMinus, 
-  Trash2, 
-  Download, 
-  Eye, 
-  ClipboardList,
-  MessageSquare,
-  Play,
-  Video,
-  Link2,
-  Sparkles,
-  Maximize2,
-  Copy,
-  Check,
-  ChevronLeft,
-  ChevronRight
-} from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+  ComposedChart, 
+  Line, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  Legend 
+} from "recharts";
 import { ref, remove } from "firebase/database";
 import { db, isFirebaseConfigured } from "@/utils/firebase";
 import { InstructorLayout, type NavPage } from "@/components/classroom/InstructorLayout";
 import type { User } from "@/hooks/useAuth";
 import type { SessionSummary } from "@/hooks/useInstructorSessions";
+import { useStudentRoster } from "@/hooks/useStudentRoster";
+import { parseStudentFile } from "@/utils/parseStudentFile";
+import ImageCropDialog from "./ImageCropDialog";
+
+// ─── Custom Chart Tooltip ───────────────────────────────────────
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-card/80 backdrop-blur-md border border-white/20 p-4 rounded-2xl shadow-2xl ring-1 ring-black/5">
+        <Typography variant="caption" className="font-black text-foreground block mb-2 uppercase tracking-tight opacity-70">
+          {label}
+        </Typography>
+        <div className="space-y-1.5">
+          {payload.map((entry: any, index: number) => (
+            <div key={index} className="flex items-center gap-3">
+              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
+              <Typography variant="body2" className="font-bold text-foreground">
+                {entry.name}: <span className="text-secondary font-black">{entry.value}</span>
+              </Typography>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 interface InstructorDashboardProps {
   user: User;
@@ -57,7 +54,8 @@ interface InstructorDashboardProps {
   sessionsLoading: boolean;
   onStartClass: (className: string) => void;
   onLogout: () => void;
-  onUpdateSettings?: (name: string, email: string, totalStudents: number) => Promise<void>;
+  onUpdateSettings?: (name: string, email: string, totalStudents: number, institution?: string, department?: string) => Promise<void>;
+  onUpdatePhoto?: (base64: string) => Promise<void>;
 }
 
 function formatDate(ts: number) {
@@ -145,16 +143,18 @@ function DashboardView({
       {/* Welcome */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl sm:text-2xl font-semibold text-foreground">
+          <Typography variant="h5" className="font-bold text-foreground">
             Welcome back, {user.displayName}
-          </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          </Typography>
+          <Typography variant="body2" className="text-muted-foreground mt-0.5">
             Here's what's happening with your sessions
-          </p>
+          </Typography>
         </div>
         <Button
+          variant="contained"
           onClick={onStartClass}
-          className="h-11 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-medium shadow-md shadow-primary/20"
+          className="h-11 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-md normal-case"
+          startIcon={<PlusIcon />}
         >
           Start New Session
         </Button>
@@ -163,16 +163,16 @@ function DashboardView({
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         {[
-          { label: "Total Sessions", value: sessions.length, icon: BookOpen, color: "bg-primary/10 text-primary" },
-          { label: "Total Students", value: user.totalStudents ?? 0, icon: Users, color: "bg-primary/10 text-primary" },
+          { label: "Total Sessions", value: sessions.length, icon: MenuBook, color: "bg-primary/10 text-primary" },
+          { label: "Total Students", value: user.totalStudents ?? 0, icon: Groups, color: "bg-primary/10 text-primary" },
           { label: "Student present", value: lastClassAttendance, icon: CheckCircle, color: "bg-success/10 text-success" },
-          { label: "Student absent", value: targetSession ? Math.max(0, (user.totalStudents ?? 0) - lastClassAttendance) : 0, icon: UserX, color: "bg-destructive/10 text-destructive" },
-          { label: "Student left session", value: lastClassLeftEarly, icon: UserMinus, color: "bg-warning/10 text-warning" },
+          { label: "Student absent", value: targetSession ? Math.max(0, (user.totalStudents ?? 0) - lastClassAttendance) : 0, icon: PersonOff, color: "bg-destructive/10 text-destructive" },
+          { label: "Student left session", value: lastClassLeftEarly, icon: PersonRemove, color: "bg-warning/10 text-warning" },
         ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="rounded-2xl bg-card/50 backdrop-blur-sm border border-white/5 shadow-sm p-4 sm:p-5">
+          <div key={label} className="rounded-2xl bg-card shadow-md p-4 sm:p-5">
             <div className="flex items-center gap-3 lg:flex-col lg:items-start lg:gap-4">
               <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${color}`}>
-                <Icon className="h-5 w-5" />
+                <Icon fontSize="small" />
               </div>
               <div>
                 <p className="text-xl sm:text-2xl font-bold text-foreground">{value}</p>
@@ -193,138 +193,128 @@ function DashboardView({
         </div>
       )}
 
-      {/* Chart */}
+      {/* Chart Card */}
       {chartData.length > 0 && (
-        <div className="rounded-2xl bg-card/50 backdrop-blur-sm border border-white/5 shadow-sm p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground px-2">Attendance Overview</h3>
+        <div className="rounded-3xl bg-card shadow-md p-5 sm:p-6 space-y-4">
+          <div className="flex items-center justify-between px-1">
+            <div>
+              <Typography variant="subtitle2" className="font-extrabold text-foreground uppercase tracking-tight">Attendance Chart</Typography>
+            </div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] sm:text-xs text-muted-foreground mr-1 font-medium bg-muted/30 px-2 py-1 rounded-lg">
-                Showing {chartPage * CHART_PAGE_SIZE + 1}-{Math.min((chartPage + 1) * CHART_PAGE_SIZE, pastSessions.length)} of {pastSessions.length}
+              <span className="text-[10px] sm:text-xs text-muted-foreground mr-1 font-black bg-primary/5 text-primary px-3 py-1 rounded-full">
+                {chartPage * CHART_PAGE_SIZE + 1}-{Math.min((chartPage + 1) * CHART_PAGE_SIZE, pastSessions.length)} / {pastSessions.length}
               </span>
-              <div className="flex items-center bg-muted/20 rounded-xl p-0.5 border border-white/5">
+              <div className="flex items-center bg-muted/20 rounded-xl p-1">
                 <Button
-                  variant="ghost"
-                  size="icon"
+                  size="small"
                   onClick={() => setChartPage(p => p + 1)}
                   disabled={chartPage >= totalPages - 1}
-                  className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-muted/40 disabled:opacity-30"
+                  className="min-w-0 h-8 w-8 rounded-lg text-muted-foreground hover:bg-muted/40 disabled:opacity-20 transition-all"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <Button
-                  variant="ghost"
-                  size="icon"
+                  size="small"
                   onClick={() => setChartPage(p => p - 1)}
                   disabled={chartPage === 0}
-                  className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-muted/40 disabled:opacity-30"
+                  className="min-w-0 h-8 w-8 rounded-lg text-muted-foreground hover:bg-muted/40 disabled:opacity-20 transition-all"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
             </div>
           </div>
-          <div className="h-[300px]">
+          
+          <div className="h-[280px] w-full pt-4">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorExpected" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#94a3b8" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorPresent" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#14b8a6" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={true} stroke="#E2E8F0" opacity={0.2} />
                 <XAxis 
                   dataKey="name" 
-                  fontSize={12} 
+                  fontSize={10} 
                   tickLine={false} 
                   axisLine={false}
                   dy={10}
-                  tick={{ fill: "#64748b" }}
+                  tick={{ fill: "#94a3b8", fontWeight: 700, fontFamily: "inherit" }}
                 />
                 <YAxis 
-                  fontSize={12} 
+                  fontSize={10} 
                   tickLine={false} 
                   axisLine={false}
-                  tick={{ fill: "#64748b" }}
+                  tick={{ fill: "#94a3b8", fontWeight: 700, fontFamily: "inherit" }}
                 />
-                <Tooltip
-                  contentStyle={{ 
-                    borderRadius: "16px", 
-                    border: "none", 
-                    boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
-                    padding: "12px"
-                  }}
-                  itemStyle={{ fontWeight: 600 }}
+                <Tooltip 
+                  cursor={{ stroke: '#2B2D42', strokeWidth: 1, strokeDasharray: '4 4' }}
+                  content={<CustomTooltip />} 
                 />
                 <Legend 
                   iconType="circle" 
                   verticalAlign="top" 
                   align="right" 
                   iconSize={8}
-                  wrapperStyle={{ paddingBottom: "20px", fontSize: "12px", fontWeight: 500 }}
+                  wrapperStyle={{ paddingBottom: "25px", fontSize: "10px", fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}
                 />
                 <Area
-                  type="monotone"
+                  type="stepBefore"
                   dataKey="Expected"
-                  stroke="#94a3b8"
-                  strokeWidth={2}
+                  fill="rgba(148, 163, 184, 0.1)"
+                  stroke="#CBD5E1"
+                  strokeWidth={1}
+                  strokeDasharray="4 4"
                   fillOpacity={1}
-                  fill="url(#colorExpected)"
-                  dot={{ r: 4, strokeWidth: 2, fill: "#fff" }}
-                  activeDot={{ r: 6, strokeWidth: 0 }}
+                  name="CAPACITY"
                 />
-                <Area
+                <Line
                   type="monotone"
                   dataKey="Present"
-                  stroke="#14b8a6"
+                  stroke="#2B2D42"
                   strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#colorPresent)"
-                  dot={{ r: 5, strokeWidth: 2, fill: "#14b8a6", stroke: "#fff" }}
-                  activeDot={{ r: 8, strokeWidth: 0 }}
+                  dot={{ r: 3, strokeWidth: 1.5, fill: "var(--background)", stroke: "#2B2D42" }}
+                  activeDot={{ r: 5, strokeWidth: 2, fill: "#2B2D42", stroke: "var(--background)" }}
+                  name="ATTENDANCE"
                 />
-              </AreaChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
       )}
 
-      {/* Last Class Activity */}
+      {/* Activity Card */}
       {lastClass && (
-        <div className="rounded-2xl bg-card/50 backdrop-blur-sm border border-white/5 shadow-sm p-5 space-y-3">
+        <div className="rounded-2xl bg-card shadow-sm p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground">
-              Last Session Activity — <span className="text-primary">{lastClass.name}</span>
+            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider opacity-60">
+              Session Overview — <span className="text-primary font-black">{lastClass.name}</span>
             </h3>
-            <span className="text-xs text-muted-foreground">{formatDate(lastClass.createdAt)}</span>
+            <span className="text-[10px] font-bold text-muted-foreground bg-muted/30 px-2 py-1 rounded-md">{formatDate(lastClass.createdAt)}</span>
           </div>
           {lastClassActivity.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">No students attended this session.</p>
+            <div className="py-8 text-center bg-muted/5 rounded-xl border border-dashed border-muted/20">
+              <p className="text-sm text-muted-foreground">No student interactions detected</p>
+            </div>
           ) : (
-            <div className="space-y-1 max-h-56 overflow-y-auto">
+            <div className="space-y-1 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
               {lastClassActivity.map((p) => (
-                <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/40 transition-colors">
-                  <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-foreground shrink-0">
+                <div key={p.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/30 transition-all group">
+                  <div className="h-8 w-8 rounded-full bg-primary/5 flex items-center justify-center text-xs font-black text-primary transition-transform group-hover:scale-110">
                     {p.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                      Joined at {new Date(p.joinedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    <p className="text-sm font-bold text-foreground truncate">{p.name}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-semibold">
+                      In at {new Date(p.joinedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </p>
                   </div>
                   {p.leftEarly ? (
-                    <span className="text-[10px] sm:text-xs px-2.5 py-1 rounded-lg bg-destructive/10 text-destructive font-semibold shadow-sm">
-                      Left at {new Date(p.leftAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+                    <div className="text-right">
+                      <span className="text-[9px] block text-destructive font-black uppercase mb-0.5">Early Exit</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-destructive/10 text-destructive font-bold">
+                        {new Date(p.leftAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
                   ) : (
-                    <span className="text-[10px] sm:text-xs px-2.5 py-1 rounded-lg bg-success/10 text-success font-semibold shadow-sm">
-                      Present (Full)
+                    <span className="text-[10px] px-2.5 py-1 rounded-full bg-success/10 text-success font-black uppercase tracking-tighter">
+                      Engaged
                     </span>
                   )}
                 </div>
@@ -337,7 +327,7 @@ function DashboardView({
       {sessions.length === 0 && !sessionsLoading && (
         <div className="rounded-2xl bg-background shadow-sm p-12 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
-            <BookOpen className="h-7 w-7 text-muted-foreground/50" />
+            <MenuBook className="h-7 w-7 text-muted-foreground/50" />
           </div>
           <p className="mt-4 text-sm font-medium text-foreground">No sessions yet</p>
           <p className="text-xs text-muted-foreground mt-1">Start your first session to see it here</p>
@@ -429,45 +419,49 @@ function ClassesView({ sessions }: { sessions: SessionSummary[] }) {
     }
   };
 
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
   return (
     <div className="p-4 sm:p-6 space-y-6">
-      <h2 className="text-xl font-semibold text-foreground">Sessions</h2>
+      <Typography variant="h6" className="font-semibold text-foreground">Sessions</Typography>
 
       {/* Live Sessions */}
       {activeSessions.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
-            <h3 className="text-sm font-semibold text-foreground">Live Now</h3>
+            <Typography variant="caption" className="font-semibold text-foreground">Live Now</Typography>
           </div>
           {activeSessions.map((s) => (
-            <div key={s.id} className="rounded-2xl bg-background shadow-sm p-4 sm:p-5 space-y-4">
+            <div key={s.id} className="rounded-2xl bg-card shadow-md p-4 sm:p-5 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <h4 className="font-semibold text-foreground">{s.name}</h4>
+                    <Typography variant="subtitle1" className="font-semibold text-foreground">{s.name}</Typography>
                     <span className="text-[10px] font-bold uppercase tracking-wider bg-success text-success-foreground px-2 py-0.5 rounded-full">Live</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <Typography variant="caption" className="text-muted-foreground block">
                     Started {formatDate(s.createdAt)} · {s.participantCount} participants
-                  </p>
+                  </Typography>
                 </div>
-                <Button
-                  size="sm"
+                  <Button
+                  variant="contained"
+                  size="small"
                   onClick={() => navigate(`/class/${s.id}`)}
-                  className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-medium shrink-0"
+                  className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-bold shrink-0 normal-case"
                 >
-                  <Maximize2 className="h-3 w-3 mr-1.5" /> Rejoin
+                  <Maximize2Icon className="h-3 w-3 mr-1.5" /> Rejoin
                 </Button>
               </div>
-              <div className="flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2">
-                <code className="flex-1 text-xs text-foreground truncate font-mono">{getClassLink(s.id)}</code>
-                  <button
+              <div className="flex items-center gap-2 rounded-xl bg-muted/30 px-3 py-2">
+                <code className="flex-1 text-xs text-foreground truncate font-mono font-bold">{getClassLink(s.id)}</code>
+                  <Button
+                    size="small"
                     onClick={() => copyLink(s.id)}
-                    className="shrink-0 h-7 px-2 rounded-md bg-background shadow-sm text-xs font-medium text-foreground hover:bg-muted transition-colors flex items-center gap-1"
+                    className="shrink-0 h-8 min-w-0 px-3 rounded-lg bg-primary text-primary-foreground shadow-md text-xs font-bold hover:bg-primary/90 transition-all normal-case"
                   >
-                  {copiedId === s.id ? <><Check className="h-2.5 w-2.5 mr-1 text-success" /> Copied</> : <><Copy className="h-2.5 w-2.5 mr-1" /> Copy</>}
-                </button>
+                  {copiedId === s.id ? <><Check className="h-3 w-3 mr-1.5" /> Copied</> : <><CopyIcon className="h-3 w-3 mr-1.5" /> Copy</>}
+                </Button>
               </div>
             </div>
           ))}
@@ -477,53 +471,46 @@ function ClassesView({ sessions }: { sessions: SessionSummary[] }) {
       {/* Past Classes */}
       {pastSessions.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-foreground">Past Sessions</h3>
+          <Typography variant="caption" className="font-semibold text-foreground">Past Sessions</Typography>
           <div className="grid sm:grid-cols-2 gap-3">
             {pastSessions.map((s) => {
               const students = s.participants.filter((p) => !p.isInstructor);
               return (
-                <div key={s.id} className="rounded-2xl bg-background shadow-sm p-4 space-y-3">
+                <div key={s.id} className="rounded-2xl bg-card shadow-sm p-4 space-y-3 transition-all hover:shadow-md">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-3 min-w-0">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-foreground truncate">{s.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <Typography variant="subtitle2" className="font-semibold text-foreground truncate">{s.name}</Typography>
+                        <Typography variant="caption" className="text-muted-foreground block mt-0.5">
                           {formatDate(s.createdAt)} · {formatDuration(s.createdAt, s.endedAt)} · {students.length} students
-                        </p>
+                        </Typography>
                       </div>
                     </div>
                   </div>
                   <div className="flex justify-end gap-2">
-                    <Button size="sm" variant="outline" className="h-8 rounded-lg text-xs hover:bg-primary/5" onClick={() => setSummarySession(s)}>
-                      <Eye className="h-3 w-3 mr-1.5" /> View
+                    <Button
+                      variant="contained"
+                      size="small"
+                      className="h-8 rounded-lg text-xs bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm normal-case font-bold"
+                      onClick={() => setSummarySession(s)}
+                    >
+                      <Visibility className="h-3 w-3 mr-1.5" /> View
                     </Button>
-                    <Button size="sm" variant="outline" className="h-8 rounded-lg text-xs bg-primary/5 hover:bg-primary/10 text-primary border-primary/20" onClick={() => downloadPdfSummary(s)}>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      className="h-8 rounded-lg text-xs bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm normal-case font-bold"
+                      onClick={() => downloadPdfSummary(s)}
+                    >
                       <Download className="h-3 w-3 mr-1.5" /> PDF
                     </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                       <Button size="sm" variant="ghost" className="h-8 w-8 rounded-lg p-0 text-destructive hover:bg-destructive/10" title="Delete">
-                        <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete "{s.name}"?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will permanently delete this session and all its data. This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => deleteSession(s.id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                      <IconButton
+                      size="small"
+                      onClick={() => setDeleteConfirmId(s.id)}
+                      className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2Icon className="h-4 w-4" />
+                    </IconButton>
                   </div>
                 </div>
               );
@@ -531,6 +518,29 @@ function ClassesView({ sessions }: { sessions: SessionSummary[] }) {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>
+        <DialogTitle>Delete Session?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" className="text-muted-foreground">
+            This will permanently delete this session and all its data. This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions className="p-4">
+          <Button onClick={() => setDeleteConfirmId(null)} className="normal-case">Cancel</Button>
+          <Button 
+            onClick={() => {
+              if (deleteConfirmId) deleteSession(deleteConfirmId);
+              setDeleteConfirmId(null);
+            }} 
+            variant="contained" 
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 normal-case"
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {sessions.length === 0 && (
         <div className="rounded-2xl bg-background p-12 text-center">
@@ -541,38 +551,50 @@ function ClassesView({ sessions }: { sessions: SessionSummary[] }) {
       )}
 
       {/* Summary Dialog */}
-      <Dialog open={!!summarySession} onOpenChange={() => setSummarySession(null)}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              Summary — {summarySession?.name}
-            </DialogTitle>
-            <DialogDescription>
+      <Dialog 
+        open={!!summarySession} 
+        onClose={() => setSummarySession(null)}
+        maxWidth="md"
+        fullWidth
+        slotProps={{
+          paper: {
+            className: "rounded-3xl",
+          }
+        }}
+      >
+        <DialogTitle className="flex justify-between items-start">
+          <div>
+            <Typography variant="h6" className="font-bold text-foreground">Summary — {summarySession?.name}</Typography>
+            <Typography variant="caption" className="text-muted-foreground block">
               {summarySession && formatDate(summarySession.createdAt)}
               {summarySession?.endedAt && ` — ${formatDate(summarySession.endedAt)}`}
-            </DialogDescription>
-          </DialogHeader>
-          
+            </Typography>
+          </div>
+          <IconButton onClick={() => setSummarySession(null)} size="small">
+            <XCircle className="h-5 w-5" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers className="max-h-[70vh] overflow-y-auto">
           {summarySession && (() => {
             const students = summarySession.participants.filter(p => !p.isInstructor);
             const chat = summarySession.chat || [];
             
             return (
-              <div className="flex-1 overflow-y-auto pr-2 space-y-6">
+              <div className="space-y-6 py-2">
                 <div>
-                  <h4 className="font-semibold text-sm mb-3 text-foreground flex items-center gap-2">
+                  <Typography variant="subtitle2" className="font-bold mb-3 text-foreground flex items-center gap-2">
                     Attendance ({students.length})
-                  </h4>
+                  </Typography>
                   {students.length === 0 ? (
-                    <p className="text-sm text-muted-foreground bg-muted/30 p-3 rounded-lg text-center">No students attended.</p>
+                    <Typography variant="body2" className="text-muted-foreground bg-muted/30 p-4 rounded-2xl text-center">No students attended.</Typography>
                   ) : (
                     <div className="space-y-2">
                       {students.map(p => {
                         const leftEarly = !!p.leftAt && summarySession.endedAt && p.leftAt < summarySession.endedAt - 5000;
                         return (
-                          <div key={p.id} className="flex justify-between items-center text-sm p-3 rounded-xl bg-muted/30 shadow-sm">
-                            <span className="font-medium">{p.name}</span>
-                            <span className={`text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full ${leftEarly ? "bg-warning/10 text-warning" : "bg-success/10 text-success"}`}>
+                          <div key={p.id} className="flex justify-between items-center text-sm p-4 rounded-2xl bg-muted/20 border border-border/50">
+                            <Typography variant="body2" className="font-medium">{p.name}</Typography>
+                            <span className={`text-[10px] font-bold tracking-wider uppercase px-2.5 py-1 rounded-full ${leftEarly ? "bg-warning/10 text-warning" : "bg-success/10 text-success"}`}>
                               {leftEarly ? "Left Early" : "Present"}
                             </span>
                           </div>
@@ -583,20 +605,20 @@ function ClassesView({ sessions }: { sessions: SessionSummary[] }) {
                 </div>
 
                 <div>
-                  <h4 className="font-semibold text-sm mb-3 text-foreground flex items-center gap-2">
+                  <Typography variant="subtitle2" className="font-bold mb-3 text-foreground flex items-center gap-2">
                     Chat Log ({chat.length})
-                  </h4>
+                  </Typography>
                   {chat.length === 0 ? (
-                    <p className="text-sm text-muted-foreground bg-muted/30 p-3 rounded-lg text-center">No messages were sent.</p>
+                    <Typography variant="body2" className="text-muted-foreground bg-muted/30 p-4 rounded-2xl text-center">No messages were sent.</Typography>
                   ) : (
                     <div className="space-y-3">
                       {chat.map((m, i) => (
-                        <div key={m.id || i} className="text-sm p-3 rounded-xl bg-muted/30 space-y-1 shadow-sm">
+                        <div key={m.id || i} className="text-sm p-4 rounded-2xl bg-muted/20 border border-border/50 space-y-1">
                           <div className="flex gap-2 items-center">
-                            <span className="font-semibold text-xs text-primary">{m.senderName}</span>
-                            <span className="text-[10px] text-muted-foreground">{new Date(m.timestamp).toLocaleTimeString()}</span>
+                            <Typography variant="caption" className="font-bold text-primary">{m.senderName}</Typography>
+                            <Typography variant="caption" className="text-[10px] text-muted-foreground">{new Date(m.timestamp).toLocaleTimeString()}</Typography>
                           </div>
-                          <p className="text-foreground text-sm">{m.text}</p>
+                          <Typography variant="body2" className="text-foreground">{m.text}</Typography>
                         </div>
                       ))}
                     </div>
@@ -606,6 +628,9 @@ function ClassesView({ sessions }: { sessions: SessionSummary[] }) {
             );
           })()}
         </DialogContent>
+        <DialogActions className="p-4">
+          <Button onClick={() => setSummarySession(null)} className="normal-case">Close</Button>
+        </DialogActions>
       </Dialog>
     </div>
   );
@@ -614,33 +639,46 @@ function ClassesView({ sessions }: { sessions: SessionSummary[] }) {
 // ─── Attendance View ──────────────────────────────────────────────
 function AttendanceView({ sessions }: { sessions: SessionSummary[] }) {
   const [attendanceSession, setAttendanceSession] = useState<SessionSummary | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const pastSessions = sessions.filter((s) => s.status === "ended");
+
+  const deleteSession = async (id: string) => {
+    if (!isFirebaseConfigured || !db) return;
+    await remove(ref(db, `sessions/${id}`));
+  };
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
-      <h2 className="text-xl font-semibold text-foreground">Attendance</h2>
+      <Typography variant="h6" className="font-semibold text-foreground">Attendance</Typography>
 
       {pastSessions.length > 0 ? (
         <div className="grid sm:grid-cols-2 gap-3">
           {pastSessions.map((s) => {
             const students = s.participants.filter((p) => !p.isInstructor);
             return (
-              <div key={s.id} className="rounded-2xl bg-background shadow-sm p-4 space-y-3">
+              <div key={s.id} className="rounded-2xl bg-card shadow-sm p-4 space-y-3 transition-all hover:shadow-md">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground truncate">{s.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <Typography variant="subtitle2" className="font-semibold text-foreground truncate">{s.name}</Typography>
+                  <Typography variant="caption" className="text-muted-foreground block mt-0.5">
                     {formatDate(s.createdAt)} · {students.length} students
-                  </p>
+                  </Typography>
                 </div>
-                <div className="flex justify-end">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 rounded-lg text-xs"
+                <div className="flex justify-end gap-2">
+                    <Button
+                    variant="contained"
+                    size="small"
+                    className="h-8 rounded-lg text-xs normal-case bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm font-bold"
                     onClick={() => setAttendanceSession(s)}
                   >
-                    <ClipboardList className="h-3 w-3 mr-1.5" /> Attendance
+                    <Assignment className="h-3 w-3 mr-1.5" /> Attendance
                   </Button>
+                  <IconButton
+                    size="small"
+                    onClick={() => setDeleteConfirmId(s.id)}
+                    className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2Icon className="h-4 w-4" />
+                  </IconButton>
                 </div>
               </div>
             );
@@ -649,32 +687,60 @@ function AttendanceView({ sessions }: { sessions: SessionSummary[] }) {
       ) : (
         <div className="rounded-2xl bg-background p-12 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+            <Groups className="h-7 w-7 text-muted-foreground/30" />
           </div>
-          <p className="mt-4 text-sm font-medium text-foreground">No past sessions yet</p>
+          <Typography variant="body2" className="mt-4 font-medium text-foreground">No past sessions yet</Typography>
         </div>
       )}
 
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>
+        <DialogTitle>Delete Attendance?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" className="text-muted-foreground">
+            This will permanently delete this session and its attendance data. This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions className="p-4">
+          <Button onClick={() => setDeleteConfirmId(null)} className="normal-case">Cancel</Button>
+          <Button 
+            onClick={() => {
+              if (deleteConfirmId) deleteSession(deleteConfirmId);
+              setDeleteConfirmId(null);
+            }} 
+            variant="contained" 
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 normal-case"
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Attendance Dialog */}
-      <Dialog open={!!attendanceSession} onOpenChange={() => setAttendanceSession(null)}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              Attendance — {attendanceSession?.name}
-            </DialogTitle>
-            <DialogDescription>
-              {attendanceSession && formatDate(attendanceSession.createdAt)}
-              {attendanceSession?.endedAt && ` — ${formatDate(attendanceSession.endedAt)}`}
-            </DialogDescription>
-          </DialogHeader>
+      <Dialog 
+        open={!!attendanceSession} 
+        onClose={() => setAttendanceSession(null)}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{ paper: { className: "rounded-3xl" } }}
+      >
+        <DialogTitle>
+          <Typography variant="h6" className="font-bold">Attendance — {attendanceSession?.name}</Typography>
+          <Typography variant="caption" className="text-muted-foreground block">
+            {attendanceSession && formatDate(attendanceSession.createdAt)}
+            {attendanceSession?.endedAt && ` — ${formatDate(attendanceSession.endedAt)}`}
+          </Typography>
+        </DialogTitle>
+        <DialogContent dividers className="max-h-[60vh] overflow-y-auto">
           {attendanceSession && (() => {
             const students = attendanceSession.participants.filter((p) => !p.isInstructor);
             return (
-              <div className="space-y-1 overflow-y-auto flex-1">
+              <div className="space-y-1">
                 {students.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">No students attended this session.</p>
+                  <Typography variant="body2" className="text-muted-foreground text-center py-8">No students attended this session.</Typography>
                 ) : (
                   <>
-                      <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs font-bold text-muted-foreground bg-muted/30 rounded-lg sticky top-0">
+                    <div className="grid grid-cols-12 gap-2 px-3 py-2 text-[10px] font-bold text-muted-foreground bg-card rounded-lg sticky top-0 uppercase tracking-wider shadow-sm z-10">
                       <div className="col-span-1">S/N</div>
                       <div className="col-span-4">Name</div>
                       <div className="col-span-3">Joined</div>
@@ -687,14 +753,14 @@ function AttendanceView({ sessions }: { sessions: SessionSummary[] }) {
                         <div key={p.id} className="grid grid-cols-12 gap-2 px-3 py-2.5 text-sm items-center rounded-lg hover:bg-muted/30">
                           <div className="col-span-1 text-xs font-medium text-muted-foreground">{i + 1}</div>
                           <div className="col-span-4 flex items-center gap-2">
-                            <span className="truncate font-medium">{p.name}</span>
+                            <Typography variant="body2" className="truncate font-medium">{p.name}</Typography>
                           </div>
-                          <div className="col-span-3 text-xs text-muted-foreground">{joinedTime}</div>
+                          <div className="col-span-3 text-[10px] text-muted-foreground font-medium">{joinedTime}</div>
                           <div className="col-span-4">
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tight ${
                               leftEarly ? "bg-destructive/10 text-destructive" : "bg-success/10 text-success"
                             }`}>
-                              {leftEarly ? `Left at ${new Date(p.leftAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : "Present (Full)"}
+                              {leftEarly ? `Left ${new Date(p.leftAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : "Present"}
                             </span>
                           </div>
                         </div>
@@ -706,61 +772,792 @@ function AttendanceView({ sessions }: { sessions: SessionSummary[] }) {
             );
           })()}
         </DialogContent>
+        <DialogActions className="p-4">
+          <Button onClick={() => setAttendanceSession(null)} className="normal-case">Close</Button>
+        </DialogActions>
       </Dialog>
     </div>
   );
 }
 
-// ─── Profile View ────────────────────────────────────────────────
+// ─── Compress image to base64 (max 200x200, JPEG 0.75) ────────────
+function compressImageToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 200;
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.75));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+// ─── Profile View ─────────────────────────────────────────────────
 function ProfileView({
   user,
   onUpdateSettings,
+  onUpdatePhoto,
 }: {
   user: User;
-  onUpdateSettings?: (name: string, email: string, totalStudents: number) => Promise<void>;
+  onUpdateSettings?: (name: string, email: string, totalStudents: number, institution?: string, department?: string) => Promise<void>;
+  onUpdatePhoto?: (base64: string) => Promise<void>;
 }) {
+  // ── Edit dialog state ──
+  const [editOpen, setEditOpen] = useState(false);
   const [name, setName] = useState(user.displayName);
   const [email, setEmail] = useState(user.email);
   const [total, setTotal] = useState(user.totalStudents?.toString() ?? "0");
-  const [loading, setLoading] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [institution, setInstitution] = useState(user.institution ?? "");
+  const [department, setDepartment] = useState(user.department ?? "");
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
 
-  const handle = async () => {
-    if (!onUpdateSettings) return;
-    setLoading(true);
-    await onUpdateSettings(name, email, parseInt(total) || 0);
-    setLoading(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  // ── Photo state ──
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<string | undefined>(user.photoURL);
+  
+  // Crop state
+  const [cropDialogOpen, setCropDialogOpen] = useState(false);
+  const [tempImage, setTempImage] = useState<string | null>(null);
+
+  // ── Student roster ──
+  const capacity = user.totalStudents ?? 0;
+  const { students, loading: rosterLoading, addStudent, addStudentsBulk, removeStudent, clearRoster, count } = useStudentRoster(user.uid);
+
+  // Add student dialog
+  const [addOpen, setAddOpen] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [newStudentName, setNewStudentName] = useState("");
+  const [newStudentMatric, setNewStudentMatric] = useState("");
+  const [addError, setAddError] = useState("");
+  const [addLoading, setAddLoading] = useState(false);
+  const [addSuccess, setAddSuccess] = useState(false);
+
+  // File import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importStatus, setImportStatus] = useState<{ added: number; skipped: number } | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
+
+  // Student search
+  const [search, setSearch] = useState("");
+
+  // Auto-dismiss alerts
+  useEffect(() => {
+    if (importStatus) {
+      const timer = setTimeout(() => setImportStatus(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [importStatus]);
+
+  useEffect(() => {
+    if (addSuccess) {
+      const timer = setTimeout(() => setAddSuccess(false), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [addSuccess]);
+
+  useEffect(() => {
+    if (settingsSaved) {
+      const timer = setTimeout(() => setSettingsSaved(false), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [settingsSaved]);
+
+  useEffect(() => {
+    if (addError) {
+      const timer = setTimeout(() => setAddError(""), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [addError]);
+
+  const openEditDialog = () => {
+    setName(user.displayName);
+    setEmail(user.email);
+    setTotal(user.totalStudents?.toString() ?? "0");
+    setInstitution(user.institution ?? "");
+    setDepartment(user.department ?? "");
+    setSettingsSaved(false);
+    setEditOpen(true);
   };
 
+  const handleSaveSettings = async () => {
+    if (!onUpdateSettings) return;
+    setSettingsSaving(true);
+    await onUpdateSettings(name, email, parseInt(total) || 0, institution, department);
+    setSettingsSaving(false);
+    setSettingsSaved(true);
+    setTimeout(() => {
+      setSettingsSaved(false);
+      setEditOpen(false);
+    }, 1000);
+  };
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !onUpdatePhoto) return;
+    
+    const reader = new FileReader();
+    reader.onload = () => {
+      setTempImage(reader.result as string);
+      setCropDialogOpen(true);
+    };
+    reader.readAsDataURL(file);
+    
+    // reset input
+    if (photoInputRef.current) photoInputRef.current.value = "";
+  };
+
+  const handleCropComplete = async (croppedImage: string) => {
+    if (!onUpdatePhoto) return;
+    setPhotoUploading(true);
+    try {
+      setPhotoPreview(croppedImage);
+      await onUpdatePhoto(croppedImage);
+    } catch {
+      // silent
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const handleAddStudent = async () => {
+    if (!newStudentName.trim()) { 
+      setAddError("Name is required."); 
+      setTimeout(() => setAddError(""), 3500);
+      return; 
+    }
+
+    // Capacity check
+    if (capacity > 0 && count >= capacity) {
+      setAddError("Limit exceeded: Maximum student capacity reached.");
+      return;
+    }
+
+    setAddLoading(true);
+    const ok = await addStudent(newStudentName, newStudentMatric);
+    setAddLoading(false);
+    if (!ok) { 
+      setAddError("Could not add student. Please try again."); 
+      setTimeout(() => setAddError(""), 3500);
+      return; 
+    }
+    setAddSuccess(true);
+    setNewStudentName("");
+    setNewStudentMatric("");
+    setAddError("");
+    setTimeout(() => {
+      setAddSuccess(false);
+      setAddOpen(false);
+    }, 1500);
+  };
+
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportLoading(true);
+    setImportStatus(null);
+    try {
+      const parsed = await parseStudentFile(file);
+      
+      let toAdd = parsed;
+      let limitExceeded = false;
+      
+      if (capacity > 0) {
+        const remaining = capacity - count;
+        if (remaining <= 0) {
+          setImportStatus({ added: 0, skipped: -2 }); // -2 custom code for limit reached
+          return;
+        }
+        if (parsed.length > remaining) {
+          toAdd = parsed.slice(0, remaining);
+          limitExceeded = true;
+        }
+      }
+
+      const result = await addStudentsBulk(toAdd);
+      if (limitExceeded) {
+        // We use a custom property or handle it in the UI
+        setImportStatus({ ...result, skipped: result.skipped + (parsed.length - toAdd.length) });
+      } else {
+        setImportStatus(result);
+      }
+    } catch {
+      setImportStatus({ added: 0, skipped: -1 });
+    } finally {
+      setImportLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const filteredStudents = students.filter(
+    (s) =>
+      s.name.toLowerCase().includes(search.toLowerCase()) ||
+      s.matricNo.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const initials = user.displayName
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
+  const capacityPct = capacity > 0 ? Math.min(100, Math.round((count / capacity) * 100)) : 0;
+
   return (
-    <div className="flex h-[calc(100vh-80px)] sm:h-[calc(100vh-100px)] items-center justify-center p-4 sm:p-6 w-full">
-      <div className="w-full max-w-md space-y-8">
-        <div className="text-center space-y-2">
-          <h2 className="text-3xl font-bold text-foreground tracking-tight">Profile Settings</h2>
-          <p className="text-sm text-muted-foreground font-medium">Manage your instructor profile and preferences</p>
+    <div className="p-4 sm:p-6 space-y-6 max-w-3xl mx-auto">
+
+      {/* ── Profile Card ─────────────────────────────────────── */}
+      <div className="rounded-3xl bg-card shadow-lg overflow-hidden">
+        {/* Gradient Banner (Fixed Light Mode Palette) */}
+        <div className="h-28 relative" style={{ background: 'linear-gradient(to right, #2a2c41, #2a2c41cc, #8ad9e299)' }}>
+          <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 20%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
         </div>
-        <div className="rounded-3xl bg-background shadow-lg shadow-black/5 p-6 sm:p-8 space-y-5">
-          <div className="space-y-2.5">
-            <Label htmlFor="sName" className="font-semibold px-1">Display Name</Label>
-            <Input id="sName" value={name} onChange={(e) => setName(e.target.value)} className="h-12 rounded-xl border-0 bg-muted/40 shadow-sm focus-visible:ring-1 focus-visible:bg-background transition-all px-4" />
-          </div>
-          <div className="space-y-2.5">
-            <Label htmlFor="sEmail" className="font-semibold px-1">Email Address</Label>
-            <Input id="sEmail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-12 rounded-xl border-0 bg-muted/40 shadow-sm focus-visible:ring-1 focus-visible:bg-background transition-all px-4" />
-          </div>
-          <div className="space-y-2.5">
-            <Label htmlFor="sTotal" className="font-semibold px-1">Total Students</Label>
-            <Input id="sTotal" type="number" min={0} value={total} onChange={(e) => setTotal(e.target.value)} className="h-12 rounded-xl border-0 bg-muted/40 shadow-sm focus-visible:ring-1 focus-visible:bg-background transition-all px-4" />
-          </div>
-          <div className="pt-2">
-            <Button onClick={handle} disabled={loading} className="w-full h-12 rounded-xl font-semibold shadow-md shadow-primary/20">
-              {loading ? "Saving…" : saved ? "Saved Successfully!" : "Save Changes"}
+
+        <div className="px-6 pb-6 -mt-12">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+
+            {/* Avatar with camera overlay */}
+            <div className="relative w-fit">
+              <Avatar
+                src={photoPreview}
+                sx={{
+                  width: 88, height: 88,
+                  fontSize: 30, fontWeight: 900,
+                  bgcolor: 'primary.main',
+                  border: '4px solid',
+                  borderColor: 'background.paper',
+                  boxShadow: '0 8px 28px rgba(0,0,0,0.18)',
+                  color: 'primary.contrastText',
+                }}
+              >
+                {!photoPreview && initials}
+              </Avatar>
+              {/* Camera Upload Button */}
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoChange}
+              />
+              <MuiTooltip title="Change profile photo">
+                <IconButton
+                  size="small"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={photoUploading}
+                  sx={{
+                    position: 'absolute', bottom: 0, right: 0,
+                    width: 28, height: 28,
+                    bgcolor: 'background.paper',
+                    border: '2px solid',
+                    borderColor: 'divider',
+                    boxShadow: 2,
+                    '&:hover': { bgcolor: 'action.hover' },
+                  }}
+                >
+                  <CameraAlt sx={{ fontSize: 14 }} />
+                </IconButton>
+              </MuiTooltip>
+            </div>
+
+            {/* Edit button */}
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Edit fontSize="small" />}
+              onClick={openEditDialog}
+              className="rounded-xl normal-case border-border text-foreground hover:bg-muted font-bold h-9 self-end sm:self-auto mb-1"
+            >
+              Edit Profile
             </Button>
+          </div>
+
+          {/* Profile info (view mode) */}
+          <div className="mt-4 space-y-2">
+            <Typography variant="h5" className="font-black text-foreground leading-tight">{user.displayName}</Typography>
+            <div className="flex items-center gap-1.5">
+              <Email sx={{ fontSize: 14 }} className="text-muted-foreground" />
+              <Typography variant="body2" className="text-muted-foreground">{user.email}</Typography>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {user.institution && (
+                <Chip icon={<Business sx={{ fontSize: 14 }} />} label={user.institution} size="small"
+                  sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', fontWeight: 700, fontSize: 11 }}
+                />
+              )}
+              {user.department && (
+                <Chip icon={<School sx={{ fontSize: 14 }} />} label={user.department} size="small"
+                  sx={{ bgcolor: 'secondary.main', color: 'secondary.contrastText', fontWeight: 700, fontSize: 11 }}
+                />
+              )}
+              <Chip
+                icon={<People sx={{ fontSize: 14 }} />}
+                label={capacity > 0 ? `${capacity} Students Max` : 'No cap set'}
+                size="small"
+                variant="outlined"
+                sx={{ fontWeight: 600, fontSize: 11 }}
+              />
+            </div>
           </div>
         </div>
       </div>
+
+      {/* ── Student Roster Card ───────────────────────────────── */}
+      <div className="rounded-3xl bg-card shadow-lg p-5 sm:p-6 space-y-4">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Typography variant="h6" className="font-black text-foreground">Student Roster</Typography>
+              <Chip
+                label={capacity > 0 ? `${count} / ${capacity}` : `${count} enrolled`}
+                size="small"
+                color={count >= capacity && capacity > 0 ? "error" : "primary"}
+                sx={{ fontWeight: 700, fontSize: 11, height: 20 }}
+              />
+            </div>
+            <Typography variant="caption" className="text-muted-foreground">Registered students for your class</Typography>
+          </div>
+          <div className="flex gap-2">
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv,.pdf,.txt,.docx"
+              className="hidden"
+              onChange={handleFileImport}
+            />
+            <MuiTooltip title="Import from Excel, CSV, PDF or text file">
+              <span>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={importLoading ? undefined : <UploadFile fontSize="small" />}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importLoading}
+                  className="rounded-xl normal-case border-border text-foreground hover:bg-muted font-bold h-9"
+                >
+                  {importLoading ? "Importing…" : "Import File"}
+                </Button>
+              </span>
+            </MuiTooltip>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<PersonAdd fontSize="small" />}
+              onClick={() => { setAddError(""); setAddOpen(true); }}
+              className="rounded-xl normal-case font-bold h-9"
+            >
+              Add Student
+            </Button>
+          </div>
+        </div>
+
+        {/* Capacity fill bar */}
+        {capacity > 0 && (
+          <div className="space-y-1">
+            <LinearProgress
+              variant="determinate"
+              value={capacityPct}
+              color={capacityPct >= 100 ? "error" : capacityPct >= 80 ? "warning" : "primary"}
+              sx={{ height: 6, borderRadius: 3, bgcolor: 'action.hover' }}
+            />
+            <Typography variant="caption" className="text-muted-foreground">
+              {count} of {capacity} students registered — session join limit
+            </Typography>
+          </div>
+        )}
+
+        {/* Import status */}
+        {importStatus && (
+          <Alert
+            severity={
+              importStatus.skipped === -1 || importStatus.skipped === -2 
+                ? "error" 
+                : importStatus.added === 0 
+                ? "warning" 
+                : "success"
+            }
+            onClose={() => setImportStatus(null)}
+            className="rounded-xl font-bold"
+            sx={importStatus.skipped === -2 ? {
+              bgcolor: 'error.main',
+              color: 'error.contrastText',
+              '& .MuiAlert-icon': { color: 'inherit' }
+            } : {}}
+          >
+            {importStatus.skipped === -1
+              ? "Failed to parse file. Please check the format and try again."
+              : importStatus.skipped === -2
+              ? "Limit exceeded: Maximum student capacity reached."
+              : importStatus.added === 0
+              ? "No student names could be found in the file. Please check the format."
+              : `Successfully imported ${importStatus.added} student${importStatus.added !== 1 ? "s" : ""}.${
+                  importStatus.skipped > 0 ? ` (${importStatus.skipped} entries skipped or capped)` : ""
+                }`}
+          </Alert>
+        )}
+
+        {/* Search */}
+        {students.length > 0 && (
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search by name or matric no…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            variant="outlined"
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search fontSize="small" className="text-muted-foreground" />
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+        )}
+
+        {/* Student list */}
+        {rosterLoading ? (
+          <div className="py-8 text-center">
+            <Typography variant="caption" className="text-muted-foreground">Loading roster…</Typography>
+          </div>
+        ) : students.length === 0 ? (
+          <div className="py-12 text-center space-y-2">
+            <div className="mx-auto h-14 w-14 rounded-2xl bg-muted flex items-center justify-center">
+              <People fontSize="large" className="text-muted-foreground/40" />
+            </div>
+            <Typography variant="body2" className="font-medium text-foreground">No students yet</Typography>
+            <Typography variant="caption" className="text-muted-foreground block">
+              Add students manually or import from a file.
+            </Typography>
+          </div>
+        ) : filteredStudents.length === 0 ? (
+          <Typography variant="body2" className="text-center text-muted-foreground py-6">No matches found.</Typography>
+        ) : (
+          <div className="space-y-1 max-h-[400px] overflow-y-auto pr-1">
+            {/* Header row */}
+            <div className="grid grid-cols-12 gap-2 px-3 py-2 text-[10px] font-bold text-muted-foreground bg-card rounded-lg sticky top-0 uppercase tracking-wider shadow-sm z-10">
+              <div className="col-span-1">#</div>
+              <div className="col-span-6">Name</div>
+              <div className="col-span-4">Matric No.</div>
+              <div className="col-span-1"></div>
+            </div>
+            {filteredStudents.map((s, i) => (
+              <div key={s.id} className="grid grid-cols-12 gap-2 px-3 py-2.5 rounded-xl hover:bg-muted/40 transition-colors items-center group">
+                <div className="col-span-1 text-xs font-bold text-muted-foreground">{i + 1}</div>
+                <div className="col-span-6 flex items-center gap-2 min-w-0">
+                  <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-[11px] font-black text-primary shrink-0">
+                    {s.name.charAt(0).toUpperCase()}
+                  </div>
+                  <Typography variant="body2" className="font-semibold text-foreground truncate">{s.name}</Typography>
+                </div>
+                <div className="col-span-4">
+                  <span className="text-xs font-mono text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-lg">
+                    {s.matricNo || "—"}
+                  </span>
+                </div>
+                <div className="col-span-1 flex justify-end">
+                  <IconButton
+                    size="small"
+                    onClick={() => removeStudent(s.id)}
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
+                  >
+                    <Close sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Edit Profile Dialog ─────────────────────────────────── */}
+      <Dialog
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{ paper: { className: "rounded-3xl" } }}
+      >
+        <DialogTitle className="flex items-center justify-between pb-1">
+          <div>
+            <Typography variant="h6" className="font-black">Edit Profile</Typography>
+            <Typography variant="caption" className="text-muted-foreground block">Update your instructor information</Typography>
+          </div>
+          <IconButton size="small" onClick={() => setEditOpen(false)} className="text-muted-foreground">
+            <Close fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent className="space-y-5 pt-16 pb-4">
+          {settingsSaved && <Alert severity="success" className="rounded-xl">Profile saved successfully!</Alert>}
+
+          {/* Photo section */}
+          <div className="flex items-center gap-4 p-4 rounded-2xl bg-muted/20">
+            <Avatar
+              src={photoPreview}
+              sx={{
+                width: 64, height: 64,
+                fontSize: 22, fontWeight: 900,
+                bgcolor: 'primary.main',
+                color: 'primary.contrastText',
+                flexShrink: 0,
+              }}
+            >
+              {!photoPreview && initials}
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <Typography variant="body2" className="font-semibold text-foreground">Profile Photo</Typography>
+              <Typography variant="caption" className="text-muted-foreground block">JPG, PNG up to 5MB · Resized to 200×200px</Typography>
+            </div>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={photoUploading ? undefined : <CameraAlt fontSize="small" />}
+              onClick={() => photoInputRef.current?.click()}
+              disabled={photoUploading}
+              className="rounded-xl normal-case font-bold border-border shrink-0"
+            >
+              {photoUploading ? "Uploading…" : "Change"}
+            </Button>
+          </div>
+
+          {/* Grid form */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <TextField
+              fullWidth
+              label="Display Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              variant="outlined"
+              size="small"
+              slotProps={{
+                input: {
+                  startAdornment: <InputAdornment position="start"><AccountCircle fontSize="small" className="text-muted-foreground" /></InputAdornment>
+                }
+              }}
+            />
+            <TextField
+              fullWidth
+              label="Email Address"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              variant="outlined"
+              size="small"
+              slotProps={{
+                input: {
+                  startAdornment: <InputAdornment position="start"><Email fontSize="small" className="text-muted-foreground" /></InputAdornment>
+                }
+              }}
+            />
+            <TextField
+              fullWidth
+              label="Institution"
+              value={institution}
+              onChange={(e) => setInstitution(e.target.value)}
+              variant="outlined"
+              size="small"
+              placeholder="e.g. University of Lagos"
+              slotProps={{
+                input: {
+                  startAdornment: <InputAdornment position="start"><Business fontSize="small" className="text-muted-foreground" /></InputAdornment>
+                }
+              }}
+            />
+            <TextField
+              fullWidth
+              label="Department"
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              variant="outlined"
+              size="small"
+              placeholder="e.g. Computer Science"
+              slotProps={{
+                input: {
+                  startAdornment: <InputAdornment position="start"><School fontSize="small" className="text-muted-foreground" /></InputAdornment>
+                }
+              }}
+            />
+            <TextField
+              fullWidth
+              label="Total Students (session join cap)"
+              type="number"
+              value={total}
+              onChange={(e) => setTotal(e.target.value)}
+              variant="outlined"
+              size="small"
+              helperText="Max students allowed to join a live session"
+              className="sm:col-span-2"
+              slotProps={{
+                input: {
+                  startAdornment: <InputAdornment position="start"><People fontSize="small" className="text-muted-foreground" /></InputAdornment>
+                }
+              }}
+            />
+          </div>
+        </DialogContent>
+
+        <DialogActions className="p-4 gap-2">
+          <Button onClick={() => setEditOpen(false)} className="normal-case" color="inherit">Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleSaveSettings}
+            disabled={settingsSaving}
+            className="normal-case font-bold rounded-xl"
+            startIcon={settingsSaving ? undefined : <Save fontSize="small" />}
+          >
+            {settingsSaving ? "Saving…" : "Save Changes"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Add Student Dialog ────────────────────────────────── */}
+      <Dialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{ 
+          paper: { 
+            className: "rounded-3xl",
+            sx: { bgcolor: 'background.paper', overflow: 'hidden' }
+          } 
+        }}
+      >
+        {/* Decorative Header Banner */}
+        <div className="h-2 bg-gradient-to-r from-primary to-secondary" />
+        
+        <DialogTitle className="flex items-start justify-between pb-2 pt-6">
+          <div className="flex gap-4">
+            <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shrink-0 transition-transform hover:scale-105">
+              <PersonAdd className="h-6 w-6" />
+            </div>
+            <div>
+              <Typography variant="h6" className="font-black text-foreground">Add Student</Typography>
+              <Typography variant="caption" className="text-muted-foreground block font-medium">
+                {count} student{count !== 1 ? "s" : ""} registered{capacity > 0 ? ` · ${capacity} cap` : ""}
+              </Typography>
+            </div>
+          </div>
+          <IconButton 
+            size="small" 
+            onClick={() => { setAddOpen(false); setAddError(""); setNewStudentName(""); setNewStudentMatric(""); }} 
+            className="text-muted-foreground hover:bg-muted/50 transition-colors"
+          >
+            <Close fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent className="space-y-6 pt-16 pb-4">
+          {addSuccess && (
+            <Alert 
+              severity="success" 
+              variant="outlined"
+              className="rounded-2xl border-success/20 bg-success/5 text-success font-medium"
+            >
+              Student added to roster successfully!
+            </Alert>
+          )}
+          {addError && (
+            <Alert 
+              severity="error" 
+              variant="outlined"
+              className="rounded-2xl border-destructive/20 bg-destructive/5 text-destructive font-medium"
+            >
+              {addError}
+            </Alert>
+          )}
+          
+          <div className="space-y-5">
+            <TextField
+              fullWidth
+              label="Full Name"
+              placeholder="e.g. John Doe"
+              value={newStudentName}
+              onChange={(e) => { setNewStudentName(e.target.value); setAddError(""); }}
+              variant="outlined"
+              autoFocus
+              onKeyDown={(e) => e.key === "Enter" && handleAddStudent()}
+              slotProps={{
+                input: {
+                  className: "rounded-xl",
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <AccountCircle fontSize="small" className="text-primary/70" />
+                    </InputAdornment>
+                  )
+                },
+              }}
+            />
+            <TextField
+              fullWidth
+              label="Matric No. / Student ID"
+              placeholder="Optional"
+              value={newStudentMatric}
+              onChange={(e) => setNewStudentMatric(e.target.value)}
+              variant="outlined"
+              onKeyDown={(e) => e.key === "Enter" && handleAddStudent()}
+              slotProps={{
+                input: {
+                  className: "rounded-xl",
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Badge fontSize="small" className="text-primary/70" />
+                    </InputAdornment>
+                  )
+                },
+              }}
+            />
+          </div>
+        </DialogContent>
+
+        <DialogActions className="p-6 pt-4 gap-3">
+          <Button 
+            onClick={() => { setAddOpen(false); setAddError(""); setNewStudentName(""); setNewStudentMatric(""); }} 
+            className="normal-case font-bold h-11 px-6 rounded-xl text-muted-foreground hover:bg-muted/50" 
+            color="inherit"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            fullWidth
+            onClick={handleAddStudent}
+            disabled={addLoading || !newStudentName.trim()}
+            className="normal-case font-black h-11 rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+            startIcon={addLoading ? undefined : <PlusIcon fontSize="small" />}
+          >
+            {addLoading ? "Adding..." : "Confirm & Add"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Image Crop Dialog */}
+      {tempImage && (
+        <ImageCropDialog
+          open={cropDialogOpen}
+          image={tempImage}
+          onClose={() => setCropDialogOpen(false)}
+          onCropComplete={handleCropComplete}
+        />
+      )}
     </div>
   );
 }
@@ -773,6 +1570,7 @@ export function InstructorDashboard({
   onStartClass,
   onLogout,
   onUpdateSettings,
+  onUpdatePhoto,
 }: InstructorDashboardProps) {
   const [activePage, setActivePage] = useState<NavPage>("dashboard");
   const [classNameDialog, setClassNameDialog] = useState(false);
@@ -791,6 +1589,7 @@ export function InstructorDashboard({
       onNavigate={setActivePage}
       displayName={user.displayName}
       email={user.email}
+      photoURL={user.photoURL}
       onLogout={onLogout}
     >
       {activePage === "dashboard" && (
@@ -804,31 +1603,41 @@ export function InstructorDashboard({
       {activePage === "classes" && <ClassesView sessions={sessions} />}
       {activePage === "attendance" && <AttendanceView sessions={sessions} />}
       {activePage === "profile" && (
-        <ProfileView user={user} onUpdateSettings={onUpdateSettings} />
+        <ProfileView user={user} onUpdateSettings={onUpdateSettings} onUpdatePhoto={onUpdatePhoto} />
       )}
 
       {/* Start Class Dialog */}
-      <Dialog open={classNameDialog} onOpenChange={setClassNameDialog}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Start a New Class</DialogTitle>
-            <DialogDescription>Enter a name for your class session</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="className">Class Name</Label>
-              <Input
-                id="className"
-                placeholder="e.g. Introduction to Biology"
-                value={className}
-                onChange={(e) => setClassName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleStartClass()}
-                className="h-10 rounded-lg"
-                autoFocus
-              />
-            </div>
-            <Button onClick={handleStartClass} className="w-full h-10 rounded-lg">
-              <Play className="h-4 w-4 mr-2" /> Start Class
+      <Dialog 
+        open={classNameDialog} 
+        onClose={() => setClassNameDialog(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{ paper: { className: "rounded-3xl p-2" } }}
+      >
+        <DialogTitle>
+          <Typography variant="h6" className="font-bold">Start a New Class</Typography>
+          <Typography variant="caption" className="text-muted-foreground block">Enter a name for your class session</Typography>
+        </DialogTitle>
+        <DialogContent>
+          <div className="space-y-6 pt-2">
+            <TextField
+              fullWidth
+              autoFocus
+              label="Class Name"
+              placeholder="e.g. Introduction to Biology"
+              value={className}
+              onChange={(e) => setClassName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleStartClass()}
+              variant="outlined"
+            />
+            <Button 
+              variant="contained"
+              fullWidth
+              onClick={handleStartClass} 
+              className="h-12 rounded-xl font-bold shadow-md normal-case"
+              startIcon={<PlayIcon />}
+            >
+              Start Class
             </Button>
           </div>
         </DialogContent>

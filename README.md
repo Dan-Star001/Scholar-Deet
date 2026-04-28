@@ -8,6 +8,8 @@ Scholar Deet is a professional virtual classroom platform designed to facilitate
 
 The platform serves as a centralized hub for instructors to manage their teaching history and for students to join live, interactive sessions. Built with a focus on minimalism and high-density information display, Scholar Deet ensures that the learning experience is unobstructed by unnecessary visual clutter while providing all the tools necessary for modern digital pedagogy.
 
+Access the full project documentation here: [Scholar Deet Guide (PDF)](./Scholar%20Deet.pdf)
+
 ---
 
 ## Core Features

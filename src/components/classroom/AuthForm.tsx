@@ -1,16 +1,27 @@
 import { useState } from "react";
 import { useFormik } from "formik";
 import * as Yup from "yup";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { User, Mail, Lock, LogIn, UserPlus, Users, Loader2 } from "lucide-react";
+import {
+  Button,
+  TextField,
+  Typography,
+  CircularProgress,
+  IconButton,
+  InputAdornment,
+} from "@mui/material";
+import { 
+  Login as LoginIcon, 
+  PersonAdd as PersonAddIcon, 
+  Visibility, 
+  VisibilityOff 
+} from "@mui/icons-material";
 
 interface AuthFormProps {
   onLogin: (email: string, password: string) => Promise<void>;
   onSignup: (email: string, password: string, displayName?: string, totalStudents?: number) => Promise<void>;
   loading: boolean;
   error: string | null;
+  onClearError?: () => void;
 }
 
 const loginSchema = Yup.object().shape({
@@ -25,8 +36,9 @@ const signupSchema = Yup.object().shape({
   totalStudents: Yup.number().min(0, "Total students cannot be negative").transform((v) => (v === "" || v === null ? undefined : v)).nullable(),
 });
 
-export function AuthForm({ onLogin, onSignup, loading, error }: AuthFormProps) {
+export function AuthForm({ onLogin, onSignup, loading, error, onClearError }: AuthFormProps) {
   const [isSignup, setIsSignup] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const formik = useFormik({
     initialValues: {
@@ -53,6 +65,11 @@ export function AuthForm({ onLogin, onSignup, loading, error }: AuthFormProps) {
   const toggleMode = () => {
     setIsSignup(!isSignup);
     formik.resetForm();
+    if (onClearError) onClearError();
+  };
+
+  const handleTogglePassword = () => {
+    setShowPassword(!showPassword);
   };
 
   return (
@@ -64,119 +81,118 @@ export function AuthForm({ onLogin, onSignup, loading, error }: AuthFormProps) {
           alt="Scholar Deet" 
           className="h-36 w-36 shrink-0 dark:brightness-110 dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]" 
         />
-        <h2 className="text-2xl font-bold text-foreground -mt-6">
-          {isSignup ? "Sign Up" : "Sign In"}
-        </h2>
+        <Typography variant="h5" className="font-bold text-foreground -mt-6">
+          {isSignup ? "Create Account" : "Sign In"}
+        </Typography>
       </div>
 
-      <form onSubmit={formik.handleSubmit} className="w-full space-y-4">
-      {isSignup && (
-        <div className="space-y-1.5">
-          <Label htmlFor="displayName" className="text-sm font-medium text-foreground">Full Name</Label>
-          <Input
+      <form onSubmit={formik.handleSubmit} className="w-full space-y-5">
+        {isSignup && (
+          <TextField
+            fullWidth
             id="displayName"
             name="displayName"
-            type="text"
+            label="Full Name"
             placeholder="John Doe"
             value={formik.values.displayName}
             onChange={formik.handleChange}
             onBlur={formik.handleBlur}
-            className={`h-11 rounded-xl border-border bg-muted/50 focus:bg-background ${
-              formik.touched.displayName && formik.errors.displayName ? "border-destructive focus-visible:ring-destructive" : ""
-            }`}
+            error={formik.touched.displayName && Boolean(formik.errors.displayName)}
+            helperText={formik.touched.displayName && formik.errors.displayName}
+            variant="outlined"
           />
-          {formik.touched.displayName && formik.errors.displayName && (
-            <p className="text-[11px] font-medium text-destructive px-1">{formik.errors.displayName}</p>
-          )}
-        </div>
-      )}
-      
-      <div className="space-y-1.5">
-        <Label htmlFor="email" className="text-sm font-medium text-foreground">Email</Label>
-        <Input
+        )}
+        
+        <TextField
+          fullWidth
           id="email"
           name="email"
+          label="Email Address"
           type="email"
           placeholder="instructor@school.edu"
           value={formik.values.email}
           onChange={formik.handleChange}
           onBlur={formik.handleBlur}
-          className={`h-11 rounded-xl border-border bg-muted/50 focus:bg-background ${
-            formik.touched.email && formik.errors.email ? "border-destructive focus-visible:ring-destructive" : ""
-          }`}
+          error={formik.touched.email && Boolean(formik.errors.email)}
+          helperText={formik.touched.email && formik.errors.email}
+          variant="outlined"
         />
-        {formik.touched.email && formik.errors.email && (
-          <p className="text-[11px] font-medium text-destructive px-1">{formik.errors.email}</p>
-        )}
-      </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="password" className="text-sm font-medium text-foreground">Password</Label>
-        <Input
+        <TextField
+          fullWidth
           id="password"
           name="password"
-          type="password"
+          label="Password"
+          type={showPassword ? "text" : "password"}
           placeholder="••••••••"
           value={formik.values.password}
           onChange={formik.handleChange}
           onBlur={formik.handleBlur}
-          className={`h-11 rounded-xl border-border bg-muted/50 focus:bg-background ${
-            formik.touched.password && formik.errors.password ? "border-destructive focus-visible:ring-destructive" : ""
-          }`}
+          error={formik.touched.password && Boolean(formik.errors.password)}
+          helperText={formik.touched.password && formik.errors.password}
+          variant="outlined"
+          slotProps={{
+            input: {
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    aria-label="toggle password visibility"
+                    onClick={handleTogglePassword}
+                    edge="end"
+                    size="small"
+                  >
+                    {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            },
+          }}
         />
-        {formik.touched.password && formik.errors.password && (
-          <p className="text-[11px] font-medium text-destructive px-1">{formik.errors.password}</p>
-        )}
-      </div>
 
-      {isSignup && (
-        <div className="space-y-1.5">
-          <Label htmlFor="totalStudents" className="text-sm font-medium text-foreground">Total Students</Label>
-          <Input
+        {isSignup && (
+          <TextField
+            fullWidth
             id="totalStudents"
             name="totalStudents"
+            label="Total Students"
             type="number"
             placeholder="e.g. 30"
             value={formik.values.totalStudents}
             onChange={formik.handleChange}
             onBlur={formik.handleBlur}
-            className={`h-11 rounded-xl border-border bg-muted/50 focus:bg-background ${
-              formik.touched.totalStudents && formik.errors.totalStudents ? "border-destructive focus-visible:ring-destructive" : ""
-            }`}
+            error={formik.touched.totalStudents && Boolean(formik.errors.totalStudents)}
+            helperText={formik.touched.totalStudents && formik.errors.totalStudents}
+            variant="outlined"
           />
-          {formik.touched.totalStudents && formik.errors.totalStudents && (
-            <p className="text-[11px] font-medium text-destructive px-1">{formik.errors.totalStudents}</p>
-          )}
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
-      )}
-
-      <Button
-        type="submit"
-        disabled={loading}
-        className="w-full h-11 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-medium shadow-sm transition-all active:scale-[0.98]"
-      >
-        {loading ? (
-          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-        ) : isSignup ? (
-          <UserPlus className="h-4 w-4 mr-2" />
-        ) : (
-          <LogIn className="h-4 w-4 mr-2" />
         )}
-        {isSignup ? "Create Account" : "Sign In"}
-      </Button>
 
-      <button
-        type="button"
-        onClick={toggleMode}
-        className="w-full text-center text-sm text-primary hover:text-primary/80 font-medium transition-colors"
-      >
-        {isSignup ? "Already have an account? Sign in" : "Need an account? Sign up"}
-      </button>
-    </form>
+        {error && (
+          <div className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive border border-destructive/20 font-medium">
+            {error}
+          </div>
+        )}
+
+        <Button
+          fullWidth
+          type="submit"
+          disabled={loading}
+          variant="contained"
+          size="large"
+          className="h-12 rounded-xl bg-primary hover:bg-primary/90 font-bold shadow-md normal-case"
+          startIcon={loading ? <CircularProgress size={20} color="inherit" /> : (isSignup ? <PersonAddIcon /> : <LoginIcon />)}
+        >
+          {isSignup ? "Create Account" : "Sign In"}
+        </Button>
+
+        <Button
+          fullWidth
+          onClick={toggleMode}
+          variant="text"
+          className="text-primary normal-case font-bold"
+        >
+          {isSignup ? "Already have an account? Sign in" : "Need an account? Sign up"}
+        </Button>
+      </form>
     </div>
   );
 }

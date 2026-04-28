@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { ref, set, onValue, push, update, off } from "firebase/database";
+import { ref, set, get, onValue, push, update, off } from "firebase/database";
 import { db, isFirebaseConfigured } from "@/utils/firebase";
 import { sanitizeText } from "@/utils/profanityFilter";
 
@@ -153,8 +153,44 @@ export function useSession(sessionId?: string) {
   );
 
   const joinSession = useCallback(
-    (name: string, isMuted: boolean = true, isVideoOn: boolean = false) => {
-      if (!sessionId) return;
+    async (name: string, isMuted: boolean = true, isVideoOn: boolean = false): Promise<string | "capacity_exceeded"> => {
+      if (!sessionId) return "capacity_exceeded";
+
+      // ── Capacity Check ──────────────────────────────────────────
+      if (isFirebaseConfigured && db) {
+        try {
+          const sessionSnap = await get(ref(db, `sessions/${sessionId}`));
+          const sessionData = sessionSnap.val();
+
+          if (sessionData) {
+            const instructorUid: string | undefined = sessionData.instructorUid;
+
+            if (instructorUid) {
+              const instrSnap = await get(ref(db, `instructors/${instructorUid}`));
+              const instrData = instrSnap.val();
+              const maxStudents: number = instrData?.totalStudents ?? 0;
+
+              if (maxStudents > 0) {
+                // Count active (non-instructor, not left) participants
+                const participants: any[] = sessionData.participants
+                  ? Object.values(sessionData.participants)
+                  : [];
+                const activeStudents = participants.filter(
+                  (p: any) => !p.isInstructor && !p.leftAt
+                ).length;
+
+                if (activeStudents >= maxStudents) {
+                  return "capacity_exceeded";
+                }
+              }
+            }
+          }
+        } catch {
+          // If check fails, allow join (non-blocking)
+        }
+      }
+      // ─────────────────────────────────────────────────────────────
+
       const participantId = crypto.randomUUID();
       const participant: Participant = {
         id: participantId,

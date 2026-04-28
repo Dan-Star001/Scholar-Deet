@@ -17,15 +17,21 @@ export interface User {
   displayName: string;
   role: "instructor" | "student";
   totalStudents: number;
+  institution?: string;
+  department?: string;
+  photoURL?: string;
 }
 
-function mapUser(fbUser: FirebaseUser, extra?: { totalStudents?: number }): User {
+function mapUser(fbUser: FirebaseUser, extra?: { totalStudents?: number; institution?: string; department?: string; photoURL?: string }): User {
   return {
     uid: fbUser.uid,
     email: fbUser.email ?? "",
     displayName: fbUser.displayName || fbUser.email?.split("@")[0] || "User",
     role: "instructor",
     totalStudents: extra?.totalStudents ?? 0,
+    institution: extra?.institution,
+    department: extra?.department,
+    photoURL: extra?.photoURL,
   };
 }
 
@@ -60,7 +66,12 @@ export function useAuth() {
     try {
       const snap = await get(ref(db, `instructors/${fbUser.uid}`));
       const data = snap.val();
-      return mapUser(fbUser, { totalStudents: data?.totalStudents ?? 0 });
+      return mapUser(fbUser, {
+        totalStudents: data?.totalStudents ?? 0,
+        institution: data?.institution,
+        department: data?.department,
+        photoURL: data?.photoURL,
+      });
     } catch {
       return mapUser(fbUser);
     }
@@ -112,6 +123,8 @@ export function useAuth() {
           displayName: name,
           email,
           totalStudents: totalStudents ?? 0,
+          institution: "",
+          department: "",
         });
       }
       setUser(mapUser(cred.user, { totalStudents: totalStudents ?? 0 }));
@@ -122,7 +135,7 @@ export function useAuth() {
     }
   }, []);
 
-  const updateSettings = useCallback(async (newName: string, newEmail: string, newTotalStudents: number) => {
+  const updateSettings = useCallback(async (newName: string, newEmail: string, newTotalStudents: number, newInstitution?: string, newDepartment?: string) => {
     if (!auth?.currentUser || !user) return;
     setLoading(true);
     setError(null);
@@ -138,13 +151,26 @@ export function useAuth() {
           displayName: newName,
           email: newEmail,
           totalStudents: newTotalStudents,
+          institution: newInstitution ?? user.institution ?? "",
+          department: newDepartment ?? user.department ?? "",
         });
       }
-      setUser({ ...user, displayName: newName, email: newEmail, totalStudents: newTotalStudents });
+      setUser({ ...user, displayName: newName, email: newEmail, totalStudents: newTotalStudents, institution: newInstitution, department: newDepartment });
     } catch (e: any) {
       setError(e.message ?? "Update failed.");
     } finally {
       setLoading(false);
+    }
+  }, [user]);
+
+  /** Save a compressed base64 profile photo to Firebase DB */
+  const updatePhotoUrl = useCallback(async (base64: string) => {
+    if (!user || !db || !isFirebaseConfigured) return;
+    try {
+      await update(ref(db, `instructors/${user.uid}`), { photoURL: base64 });
+      setUser((prev) => prev ? { ...prev, photoURL: base64 } : prev);
+    } catch {
+      // silent
     }
   }, [user]);
 
@@ -154,5 +180,9 @@ export function useAuth() {
     setUser(null);
   }, []);
 
-  return { user, loading, error, login, signup, logout, updateSettings, isAuthenticated: !!user, initializing };
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  return { user, loading, error, login, signup, logout, updateSettings, updatePhotoUrl, clearError, isAuthenticated: !!user, initializing };
 }
